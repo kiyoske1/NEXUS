@@ -180,3 +180,12 @@ def test_dashboard_level_and_streak(tmp_path):
     summary = db.dashboard_summary()
     assert summary["done_today"] == 1
     assert summary["week_done"] == 1
+    assert summary["xp"] == 500
+
+
+def test_transaction_can_be_deleted(tmp_path):
+    db = Database(tmp_path / "delete-transaction.db")
+    transaction_id = db.add_transaction("Temporary expense", 25, "expense")
+    assert len(db.get_transactions()) == 1
+    db.delete_transaction(transaction_id)
+    assert db.get_transactions() == []
