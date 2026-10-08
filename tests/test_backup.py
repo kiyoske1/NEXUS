@@ -1,7 +1,8 @@
 import json
 import sqlite3
+import zipfile
 
-from nexus.backup import create_backup, export_json
+from nexus.backup import create_backup, create_full_backup, export_json
 from nexus.database import Database
 
 
@@ -33,3 +34,19 @@ def test_backup_cannot_overwrite_live_database(tmp_path):
         assert "different from the live database" in str(error)
     else:
         raise AssertionError("Expected backup destination guard")
+
+
+def test_full_backup_contains_account_registry_and_workspaces(tmp_path):
+    db = Database(tmp_path / "source.db")
+    db.create_account("Alice", "alice@example.com", "alice", "secret1")
+    db.add_task("Alice quest", xp=30)
+    db.create_account("Bob", "bob@example.com", "bob", "secret2")
+    db.add_task("Bob quest", xp=50)
+
+    destination = create_full_backup(db, tmp_path / "nexus-backup.nexus.zip")
+    with zipfile.ZipFile(destination) as archive:
+        names = set(archive.namelist())
+        assert "manifest.json" in names
+        assert "accounts/nexus_accounts.db" in names
+        assert "accounts/workspaces/account_1.db" in names
+        assert "accounts/workspaces/account_2.db" in names
