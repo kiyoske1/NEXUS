@@ -393,6 +393,16 @@ class Database:
             raise ValueError("Enter a valid email")
         if not username:
             raise ValueError("Username cannot be empty")
+        if _register:
+            with self._connect_accounts() as accounts:
+                current = accounts.execute("SELECT id FROM accounts WHERE db_path = ?", (str(self.path),)).fetchone()
+                current_id = current["id"] if current else None
+                conflict = accounts.execute(
+                    "SELECT id FROM accounts WHERE (email = ? COLLATE NOCASE OR username = ? COLLATE NOCASE) AND id != COALESCE(?, -1)",
+                    (email, username, current_id),
+                ).fetchone()
+                if conflict:
+                    raise ValueError("That email or username is already registered on this PC.")
         with self.connect() as db:
             existing = db.execute("SELECT password_hash, salt FROM profile WHERE id = 1").fetchone()
             salt = existing["salt"] if existing and existing["salt"] else secrets.token_hex(16)
