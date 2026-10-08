@@ -119,7 +119,6 @@ def current_user(credentials: HTTPAuthorizationCredentials = Depends(bearer)):
         )
         conn.commit()
     user = dict(row)
-    user.pop("session_device_id", None)
     conn.close()
     return user
 
@@ -166,6 +165,11 @@ class DeviceOut(BaseModel):
     name: str
     created_at: str
     last_seen_at: str
+    current: bool = False
+
+
+class DeviceUpdateIn(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
 
 
 class SyncRecordIn(BaseModel):
@@ -265,7 +269,22 @@ def devices(user=Depends(current_user)):
         (user["id"],),
     ).fetchall()
     conn.close()
-    return [dict(r) for r in rows]
+    return [{**dict(r), "current": r["id"] == user.get("session_device_id")} for r in rows]
+
+
+@api.patch("/devices/{device_id}", response_model=DeviceOut)
+def rename_device(device_id: str, data: DeviceUpdateIn, user=Depends(current_user)):
+    name = data.name.strip()
+    conn = db()
+    row = conn.execute("SELECT id,name,created_at,last_seen_at FROM devices WHERE id=? AND user_id=?", (device_id, user["id"])).fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(404, "Device not found")
+    conn.execute("UPDATE devices SET name=? WHERE id=? AND user_id=?", (name, device_id, user["id"]))
+    conn.commit()
+    updated = conn.execute("SELECT id,name,created_at,last_seen_at FROM devices WHERE id=? AND user_id=?", (device_id, user["id"])).fetchone()
+    conn.close()
+    return {**dict(updated), "current": device_id == user.get("session_device_id")}
 
 
 @api.delete("/devices/{device_id}")
