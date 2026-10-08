@@ -167,3 +167,16 @@ def test_profile_edit_cannot_take_another_account_identity(tmp_path):
         db.save_profile("Alice", "bob@example.com", "alice", "")
 
     assert db.get_profile()["email"] == "alice@example.com"
+
+
+
+def test_dashboard_level_and_streak(tmp_path):
+    db = Database(tmp_path / "dashboard.db")
+    db.save_profile("Vova", "vova@example.com", "vova", "secret")
+    db.add_task("Today quest", xp=500)
+    db.complete_task(1)
+    assert db.level_info()["level"] == 2
+    assert db.streak_days() == 1
+    summary = db.dashboard_summary()
+    assert summary["done_today"] == 1
+    assert summary["week_done"] == 1
