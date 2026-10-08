@@ -251,7 +251,21 @@ class MainWindow(QMainWindow):
                 names += f" +{len(accounts) - 3}"
             note = QLabel(f"Local accounts on this PC · {names}"); note.setObjectName("Muted"); box.addWidget(note)
         note = QLabel("Each account has its own quests, habits, focus history, finances, journal, and profile."); note.setObjectName("Muted"); note.setWordWrap(True); box.addWidget(note)
+        if accounts:
+            box.addWidget(heading("LOCAL WORKSPACES", "Tiny"))
+            for account in accounts:
+                account_button = QPushButton(f"  @{account['username']}   ·   {account['name']}")
+                account_button.setMinimumHeight(42)
+                account_button.setObjectName("Secondary")
+                account_button.clicked.connect(lambda checked=False, u=account["username"]: self._prefill_account(u))
+                box.addWidget(account_button)
         self.setCentralWidget(root)
+
+    def _prefill_account(self, username: str) -> None:
+        self._show_login_screen()
+        if hasattr(self, "auth_username"):
+            self.auth_username.setText(username)
+            self.auth_password.setFocus()
 
     def _show_register_screen(self) -> None:
         root, box = self._auth_shell("Create your NEXUS", "Set up your local account and personal workspace.")
