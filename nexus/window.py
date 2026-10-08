@@ -564,7 +564,7 @@ class MainWindow(QMainWindow):
             "English": ["Overview", "Quests", "Habits", "Focus", "Finance", "Journal", "Calendar", "Insights", "Settings"],
             "Русский": ["Обзор", "Задачи", "Привычки", "Фокус", "Финансы", "Дневник", "Календарь", "Статистика", "Настройки"],
             "Română": ["Panou", "Sarcini", "Obiceiuri", "Focus", "Finanțe", "Jurnal", "Calendar", "Statistici", "Setări"],
-        }.get(self.language, ["Overview", "Quests", "Habits", "Focus", "Finance", "Journal", "Settings"])
+        }.get(self.language, ["Overview", "Quests", "Habits", "Focus", "Finance", "Journal", "Calendar", "Insights", "Settings"])
 
     def _tr(self, text: str) -> str:
         ru = {
