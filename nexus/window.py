@@ -1,7 +1,7 @@
 """Main NEXUS desktop interface."""
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, QTimer, QSettings
+from PySide6.QtCore import Qt, QTimer, QSettings, QDate
 from PySide6.QtGui import QFont, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QLabel, QPushButton,
@@ -93,6 +93,7 @@ class MainWindow(QMainWindow):
         self._timer.timeout.connect(self._tick)
         self._build_shell()
         self._apply_theme()
+        self._show_auth_gate_if_needed()
         self._apply_language()
         self._apply_currency()
         self.refresh_all()
@@ -127,8 +128,8 @@ class MainWindow(QMainWindow):
         self.nav = QButtonGroup(self)
         self.nav.setExclusive(True)
         self.pages = QStackedWidget()
-        self.page_names = ["Overview", "Quests", "Habits", "Focus", "Finance", "Journal", "Settings"]
-        symbols = ["⌂", "◇", "✳", "◷", "↗", "▤", "⚙"]
+        self.page_names = ["Overview", "Quests", "Habits", "Focus", "Finance", "Journal", "Calendar", "Insights", "Settings"]
+        symbols = ["⌂", "◇", "✳", "◷", "↗", "▤", "▦", "◒", "⚙"]
         for index, name in enumerate(self.page_names):
             button = QPushButton(f"{symbols[index]}     {name}")
             button.setObjectName("Nav")
@@ -199,9 +200,12 @@ class MainWindow(QMainWindow):
         self.pages.addWidget(self._focus_page())
         self.pages.addWidget(self._finance_page())
         self.pages.addWidget(self._journal_page())
+        self.pages.addWidget(self._calendar_page())
+        self.pages.addWidget(self._insights_page())
         self.pages.addWidget(self._settings_page())
         content_layout.addWidget(self.pages, 1)
         outer.addWidget(content, 1)
+        self._app_root = root
         self.setCentralWidget(root)
 
         self._shortcuts = []
@@ -216,6 +220,167 @@ class MainWindow(QMainWindow):
         backup_shortcut.activated.connect(self._backup_database)
         self._shortcuts.append(backup_shortcut)
 
+
+    def _show_auth_gate_if_needed(self) -> None:
+        profile = self.db.get_profile()
+        if profile and profile.get("password_hash"):
+            self._show_login_screen()
+        else:
+            self._show_register_screen()
+
+    def _auth_shell(self, title: str, subtitle: str) -> tuple[QWidget, QVBoxLayout]:
+        root = QWidget()
+        root.setObjectName("AppRoot")
+        outer = QVBoxLayout(root)
+        outer.setContentsMargins(40, 40, 40, 40)
+        outer.addStretch(1)
+        card = panel()
+        card.setMaximumWidth(520)
+        box = QVBoxLayout(card)
+        box.setContentsMargins(34, 34, 34, 34)
+        box.setSpacing(14)
+        box.addWidget(heading("NEXUS", "Brand"))
+        box.addWidget(heading(title, "Hero"))
+        box.addWidget(QLabel(subtitle))
+        outer.addWidget(card, 0, Qt.AlignmentFlag.AlignHCenter)
+        outer.addStretch(1)
+        return root, box
+
+    def _show_register_screen(self) -> None:
+        root, box = self._auth_shell("Create your NEXUS", "One local account for your personal command center.")
+        self.auth_name = QLineEdit()
+        self.auth_name.setPlaceholderText("Display name")
+        self.auth_email = QLineEdit()
+        self.auth_email.setPlaceholderText("Email")
+        self.auth_username = QLineEdit()
+        self.auth_username.setPlaceholderText("Username")
+        self.auth_password = QLineEdit()
+        self.auth_password.setPlaceholderText("Password")
+        self.auth_password.setEchoMode(QLineEdit.EchoMode.Password)
+        create = QPushButton("Create account")
+        create.setObjectName("Primary")
+        create.clicked.connect(self._register_account)
+        for widget in (self.auth_name, self.auth_email, self.auth_username, self.auth_password, create):
+            box.addWidget(widget)
+        note = QLabel("Local account is ready now. Google OAuth and cloud sync can be added later.")
+        note.setObjectName("Muted")
+        note.setWordWrap(True)
+        box.addWidget(note)
+        self.setCentralWidget(root)
+
+    def _show_login_screen(self) -> None:
+        root, box = self._auth_shell("Welcome back", "Sign in to unlock your NEXUS workspace.")
+        profile = self.db.get_profile() or {}
+        self.auth_username = QLineEdit()
+        self.auth_username.setText(profile.get("username", ""))
+        self.auth_username.setPlaceholderText("Username or email")
+        self.auth_password = QLineEdit()
+        self.auth_password.setPlaceholderText("Password")
+        self.auth_password.setEchoMode(QLineEdit.EchoMode.Password)
+        login = QPushButton("Sign in")
+        login.setObjectName("Primary")
+        login.clicked.connect(self._login_account)
+        self.auth_status = QLabel("")
+        self.auth_status.setObjectName("Muted")
+        box.addWidget(self.auth_username)
+        box.addWidget(self.auth_password)
+        box.addWidget(login)
+        box.addWidget(self.auth_status)
+        self.setCentralWidget(root)
+
+    def _register_account(self) -> None:
+        try:
+            if len(self.auth_password.text()) < 6:
+                raise ValueError("Password must be at least 6 characters")
+            self.db.save_profile(self.auth_name.text(), self.auth_email.text(), self.auth_username.text(), self.auth_password.text())
+            self._unlock_workspace()
+        except ValueError as error:
+            QMessageBox.warning(self, "NEXUS", str(error))
+
+    def _login_account(self) -> None:
+        if self.db.verify_profile_password(self.auth_password.text()):
+            self._unlock_workspace()
+        else:
+            self.auth_status.setText("Incorrect password.")
+
+    def _unlock_workspace(self) -> None:
+        self.setCentralWidget(self._app_root)
+        self.refresh_all()
+
+    def _calendar_page(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(13)
+        card = panel()
+        box = QVBoxLayout(card)
+        box.setContentsMargins(18, 16, 18, 16)
+        box.addWidget(heading("Your calendar", "Hero"))
+        box.addWidget(QLabel("Pick a day and review your logged activity."))
+        self.calendar = QCalendarWidget()
+        self.calendar.setGridVisible(False)
+        self.calendar.setSelectedDate(QDate.currentDate())
+        self.calendar.selectionChanged.connect(self._calendar_selected)
+        box.addWidget(self.calendar)
+        layout.addWidget(card, 1)
+        activity = panel()
+        abox = QVBoxLayout(activity)
+        abox.setContentsMargins(18, 16, 18, 16)
+        self.calendar_day_label = heading("Today", "Section")
+        self.calendar_day_list = QListWidget()
+        abox.addWidget(self.calendar_day_label)
+        abox.addWidget(self.calendar_day_list)
+        layout.addWidget(activity, 1)
+        self._calendar_selected()
+        return page
+
+    def _calendar_selected(self) -> None:
+        if not hasattr(self, "calendar_day_label"):
+            return
+        qd = self.calendar.selectedDate()
+        iso = qd.toString("yyyy-MM-dd")
+        self.calendar_day_label.setText(qd.toString("dddd, d MMMM yyyy"))
+        self.calendar_day_list.clear()
+        for task in self.db.get_tasks(include_done=True):
+            if task.get("completed_at", "").startswith(iso):
+                self.calendar_day_list.addItem(f"✓  {task['title']}   ·   {task['xp']} XP")
+        if not self.calendar_day_list.count():
+            self.calendar_day_list.addItem("No logged activity for this day.")
+
+    def _insights_page(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(13)
+        hero = panel()
+        hb = QVBoxLayout(hero)
+        hb.setContentsMargins(20, 18, 20, 18)
+        hb.addWidget(heading("Your numbers, at a glance.", "Hero"))
+        hb.addWidget(QLabel("A compact view of consistency, quests, focus, and money."))
+        layout.addWidget(hero)
+        grid = QGridLayout()
+        grid.setSpacing(13)
+        self.insight_labels = {}
+        items = [
+            ("tasks", "Completed quests"),
+            ("xp", "Experience earned"),
+            ("focus", "Focus minutes"),
+            ("balance", "Current balance"),
+            ("habits", "Habits completed"),
+            ("entries", "Journal entries"),
+        ]
+        for idx, (key, title) in enumerate(items):
+            card = panel()
+            cb = QVBoxLayout(card)
+            cb.setContentsMargins(18, 16, 18, 16)
+            cb.addWidget(heading(title, "Tiny"))
+            value = heading("0", "Metric")
+            cb.addWidget(value)
+            self.insight_labels[key] = value
+            grid.addWidget(card, idx // 3, idx % 3)
+        layout.addLayout(grid)
+        layout.addStretch(1)
+        return page
 
     def _currency_prefix(self) -> str:
         return {"RUB": "₽ ", "PMR": "р. ", "USD": "$ ", "EUR": "€ ", "USDT": "₮ "}.get(self.currency, "₽ ")
@@ -852,6 +1017,13 @@ class MainWindow(QMainWindow):
         from datetime import datetime
         self.date_label.setText(datetime.now().strftime("%a  ·  %d %b %Y").upper())
         stats = self.db.stats()
+        if hasattr(self, "insight_labels"):
+            self.insight_labels["tasks"].setText(str(stats["tasks_done"]))
+            self.insight_labels["xp"].setText(f'{stats["xp"]} XP')
+            self.insight_labels["focus"].setText(f'{stats["focus_minutes"]} min')
+            self.insight_labels["balance"].setText(self._money(stats["balance"]))
+            self.insight_labels["habits"].setText(f'{stats["habits_done"]}/{stats["habits_total"]}')
+            self.insight_labels["entries"].setText(str(len(self.db.get_journal_entries())))
         self.metric_labels["tasks_done"].setText(str(stats["tasks_done"]))
         self.metric_labels["xp"].setText(f'{stats["xp"]} XP')
         self.metric_labels["habits_done"].setText(f'{stats["habits_done"]}/{stats["habits_total"]}')
