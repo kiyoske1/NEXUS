@@ -703,12 +703,15 @@ class MainWindow(QMainWindow):
         sync_row = QHBoxLayout()
         cloud_connect = QPushButton("☁  Connect cloud account")
         cloud_connect.clicked.connect(self._connect_cloud)
+        cloud_register = QPushButton("+  Create cloud account")
+        cloud_register.clicked.connect(self._register_cloud)
         cloud_sync = QPushButton("↻  Sync now")
         cloud_sync.setObjectName("Primary")
         cloud_sync.clicked.connect(self._cloud_sync)
         cloud_disconnect = QPushButton("Disconnect")
         cloud_disconnect.clicked.connect(self._disconnect_cloud)
         sync_row.addWidget(cloud_connect)
+        sync_row.addWidget(cloud_register)
         sync_row.addWidget(cloud_sync)
         sync_row.addWidget(cloud_disconnect)
         sync_box.addLayout(sync_row)
@@ -759,6 +762,27 @@ class MainWindow(QMainWindow):
             self.settings.setValue("cloud_token", self.sync_client.token)
             self._refresh_sync_status()
             self._message(f"Cloud connected as @{user['username']}.")
+        except SyncError as error:
+            self._message(str(error))
+
+    def _register_cloud(self) -> None:
+        name, ok = QInputDialog.getText(self, "Create cloud account", "Name:")
+        if not ok or not name.strip():
+            return
+        email, ok = QInputDialog.getText(self, "Create cloud account", "Email:")
+        if not ok or not email.strip():
+            return
+        username, ok = QInputDialog.getText(self, "Create cloud account", "Username:")
+        if not ok or not username.strip():
+            return
+        password, ok = QInputDialog.getText(self, "Create cloud account", "Password (6+ characters):", QLineEdit.EchoMode.Password)
+        if not ok:
+            return
+        try:
+            user = self.sync_client.register(name.strip(), email.strip(), username.strip(), password)
+            self.settings.setValue("cloud_token", self.sync_client.token)
+            self._refresh_sync_status()
+            self._message(f"Cloud account created for @{user['username']}.")
         except SyncError as error:
             self._message(str(error))
 
