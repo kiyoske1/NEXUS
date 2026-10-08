@@ -20,17 +20,17 @@ STYLES = """
 * { font-family: 'Segoe UI'; font-size: 13px; }
 QMainWindow, QWidget { background: #0d0e12; color: #f0f0f5; }
 QWidget#AppRoot { background: #0d0e12; }
-QFrame#Sidebar { background: #111218; border: 1px solid #242530; border-radius: 20px; }
-QFrame#Panel { background: #15161e; border: 1px solid #282936; border-radius: 18px; }
-QFrame#HeroPanel { background: #171722; border: 1px solid #302c43; border-radius: 22px; }
+QFrame#Sidebar { background: #101117; border: 1px solid #252630; border-radius: 24px; }
+QFrame#Panel { background: #15161e; border: 1px solid #292a36; border-radius: 20px; }
+QFrame#HeroPanel { background: #171722; border: 1px solid #322e46; border-radius: 24px; }
 QFrame#AccentPanel { background: #c7f36b; border: none; border-radius: 18px; color: #171a12; }
 QLabel { color: #eeeeF4; background: transparent; }
 QLabel#Brand { font-size: 25px; font-weight: 850; letter-spacing: 4px; color: #c7f36b; }
 QLabel#BrandSub { color: #777988; font-size: 9px; font-weight: 700; letter-spacing: 1.7px; }
 QLabel#Muted { color: #858797; }
 QLabel#Eyebrow { color: #aaa1d7; font-size: 10px; font-weight: 800; letter-spacing: 2px; }
-QLabel#Hero { font-size: 31px; font-weight: 750; letter-spacing: -0.7px; color: #f7f6ff; }
-QLabel#Metric { font-size: 28px; font-weight: 750; color: #f5f4fb; }
+QLabel#Hero { font-size: 34px; font-weight: 750; letter-spacing: -0.7px; color: #f7f6ff; }
+QLabel#Metric { font-size: 30px; font-weight: 750; color: #f5f4fb; }
 QLabel#MetricAccent { font-size: 28px; font-weight: 800; color: #c7f36b; }
 QLabel#Section { font-size: 15px; font-weight: 750; color: #f4f2fc; }
 QLabel#Tiny { color: #8d8e9d; font-size: 10px; font-weight: 700; letter-spacing: 1px; }
@@ -41,7 +41,7 @@ QPushButton:hover { background: #2b2c39; border-color: #7d78a9; }
 QPushButton:checked { background: #242332; color: #d6f68b; border: 1px solid #45415e; font-weight: 700; }
 QPushButton#Primary { background: #c7f36b; color: #171a12; border: 1px solid #c7f36b; font-weight: 800; }
 QPushButton#Primary:hover { background: #d5ff86; }
-QPushButton#Nav { background: transparent; color: #8d8e9d; border: 1px solid transparent; padding: 12px 13px; border-radius: 11px; }
+QPushButton#Nav { font-size: 12px; background: transparent; color: #8d8e9d; border: 1px solid transparent; padding: 12px 13px; border-radius: 11px; }
 QPushButton#Nav:hover { background: #1a1b25; color: #f0eff8; }
 QPushButton#Nav:checked { background: #22222f; color: #d8f79b; border: 1px solid #353449; font-weight: 700; }
 QLineEdit, QTextEdit, QComboBox, QSpinBox, QDoubleSpinBox { background: #101117; color: #f0eff8; border: 1px solid #323340; border-radius: 10px; padding: 10px; selection-background-color: #5f5a86; }
@@ -51,7 +51,7 @@ QListWidget { background: transparent; border: none; outline: none; padding: 2px
 QListWidget::item { background: #1c1d27; border: 1px solid #292a37; border-radius: 10px; padding: 12px; margin: 4px 0; color: #e5e4ed; }
 QListWidget::item:hover { background: #232431; border-color: #444157; }
 QListWidget::item:selected { border: 1px solid #8c84ba; background: #29283a; color: #f6f4ff; }
-QProgressBar { border: none; background: #2a2b36; border-radius: 5px; height: 8px; text-align: center; color: transparent; }
+QProgressBar { border: none; background: #292a35; border-radius: 5px; height: 9px; text-align: center; color: transparent; }
 QProgressBar::chunk { background: #c7f36b; border-radius: 5px; }
 QScrollArea { border: none; background: transparent; }
 QRadioButton { spacing: 8px; }
@@ -77,9 +77,10 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.db = db or Database()
         self.setWindowTitle("NEXUS | Personal Command Center")
-        self.resize(1180, 780)
-        self.setMinimumSize(940, 640)
+        self.resize(1280, 820)
+        self.setMinimumSize(980, 680)
         self.setStyleSheet(STYLES)
+        self.setWindowOpacity(1.0)
         self._focus_total_seconds = 25 * 60
         self._focus_seconds = self._focus_total_seconds
         self._focus_running = False
