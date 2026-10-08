@@ -195,6 +195,66 @@ class Database:
                 (int(duration_minutes), self.now()),
             )
 
+    def weekly_activity(self, end_date: date | None = None) -> list[dict[str, Any]]:
+        """Return activity totals for the seven calendar days ending on end_date."""
+        from datetime import timedelta
+
+        end = end_date or date.today()
+        start = end - timedelta(days=6)
+        with self.connect() as db:
+            task_rows = db.execute("""
+                SELECT substr(completed_at, 1, 10) AS day, COUNT(*) AS total
+                FROM tasks
+                WHERE done = 1 AND completed_at IS NOT NULL
+                  AND substr(completed_at, 1, 10) BETWEEN ? AND ?
+                GROUP BY substr(completed_at, 1, 10)
+            """, (start.isoformat(), end.isoformat())).fetchall()
+            focus_rows = db.execute("""
+                SELECT substr(completed_at, 1, 10) AS day,
+                       COALESCE(SUM(duration_minutes), 0) AS total
+                FROM focus_sessions
+                WHERE substr(completed_at, 1, 10) BETWEEN ? AND ?
+                GROUP BY substr(completed_at, 1, 10)
+            """, (start.isoformat(), end.isoformat())).fetchall()
+            habit_rows = db.execute("""
+                SELECT log_date AS day, COUNT(*) AS total
+                FROM habit_logs
+                WHERE log_date BETWEEN ? AND ?
+                GROUP BY log_date
+            """, (start.isoformat(), end.isoformat())).fetchall()
+        tasks_by_day = {row["day"]: row["total"] for row in task_rows}
+        focus_by_day = {row["day"]: row["total"] for row in focus_rows}
+        habits_by_day = {row["day"]: row["total"] for row in habit_rows}
+        result = []
+        for offset in range(7):
+            day = start + timedelta(days=offset)
+            key = day.isoformat()
+            result.append({
+                "date": key,
+                "label": day.strftime("%a").upper()[:2],
+                "quests": int(tasks_by_day.get(key, 0)),
+                "focus": int(focus_by_day.get(key, 0)),
+                "habits": int(habits_by_day.get(key, 0)),
+            })
+        return result
+
+    def habit_streak(self, habit_id: int, on_date: date | None = None) -> int:
+        """Count consecutive daily check-ins ending today (or the supplied date)."""
+        from datetime import timedelta
+
+        current = on_date or date.today()
+        with self.connect() as db:
+            rows = db.execute(
+                "SELECT log_date FROM habit_logs WHERE habit_id = ? ORDER BY log_date DESC",
+                (habit_id,),
+            ).fetchall()
+        completed_days = {row["log_date"] for row in rows}
+        streak = 0
+        while current.isoformat() in completed_days:
+            streak += 1
+            current -= timedelta(days=1)
+        return streak
+
     def stats(self) -> dict[str, Any]:
         today = date.today().isoformat()
         with self.connect() as db:
