@@ -443,10 +443,28 @@ class MainWindow(QMainWindow):
         iso = qd.toString("yyyy-MM-dd")
         self.calendar_day_label.setText(qd.toString("dddd, d MMMM yyyy"))
         self.calendar_day_list.clear()
+
+        activity: list[str] = []
         for task in self.db.get_tasks(include_done=True):
-            if task.get("completed_at", "").startswith(iso):
-                self.calendar_day_list.addItem(f"✓  {task['title']}   ·   {task['xp']} XP")
-        if not self.calendar_day_list.count():
+            completed_at = task.get("completed_at") or ""
+            if completed_at.startswith(iso):
+                activity.append(f'✓  Quest: {task["title"]}   ·   {task["xp"]} XP')
+
+        for session in self.db.get_focus_sessions(iso):
+            activity.append(f'◷  Focus: {session["duration_minutes"]} min')
+
+        for habit in self.db.get_habits(iso):
+            if habit.get("done"):
+                activity.append(f'✳  Habit: {habit["title"]}')
+
+        for transaction in self.db.get_transactions():
+            if transaction.get("created_at", "").startswith(iso):
+                sign = "+" if transaction["kind"] == "income" else "−"
+                activity.append(f'{sign}  Finance: {transaction["title"]}   ·   {self._money(transaction["amount"])}')
+
+        if activity:
+            self.calendar_day_list.addItems(activity)
+        else:
             self.calendar_day_list.addItem("No logged activity for this day.")
 
     def _insights_page(self) -> QWidget:
