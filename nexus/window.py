@@ -920,6 +920,20 @@ class MainWindow(QMainWindow):
         layout.addLayout(bottom, 1)
         return page
 
+    def _refresh_dashboard_summary(self) -> None:
+        if not hasattr(self, "hero_xp_label"):
+            return
+        data = self.db.dashboard_summary()
+        self.hero_xp_label.setText(f'{data["xp"]} XP')
+        self.hero_quest_copy.setText(f'{data["open_tasks"]} open quests  ·  {data["done_today"]} completed today')
+        if hasattr(self, "daily_progress"):
+            target = max(data["week_done"], 7)
+            self.daily_progress.setValue(min(100, int(data["week_done"] / target * 100)))
+        if hasattr(self, "progress_copy"):
+            self.progress_copy.setText(f'{data["week_done"]} quests completed across the last 7 days · {data["focus_today"]} focus min today')
+        if hasattr(self, "focus_minutes_copy"):
+            self.focus_minutes_copy.setText(f'{data["focus_today"]} min')
+
     def _quests_page(self) -> QWidget:
         page = QWidget()
         layout = QVBoxLayout(page)
