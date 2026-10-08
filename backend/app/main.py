@@ -5,6 +5,9 @@ import json
 import os
 import secrets
 import sqlite3
+
+from .config import settings
+from .storage import connect
 import uuid
 
 from fastapi import Depends, FastAPI, HTTPException, status
@@ -13,68 +16,24 @@ from pydantic import BaseModel, EmailStr, Field
 
 APP_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_DB_PATH = APP_DIR / "nexus_server.db"
-TOKEN_TTL_DAYS = 30
-REFRESH_TTL_DAYS = 90
+TOKEN_TTL_MINUTES = settings.access_token_minutes
+REFRESH_TTL_DAYS = settings.refresh_token_days
 bearer = HTTPBearer(auto_error=False)
-app = FastAPI(title="NEXUS API", version="0.3.0")
+app = FastAPI(title="NEXUS API", version="0.4.0")
+
+if settings.cors_origins:
+    from fastapi.middleware.cors import CORSMiddleware
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=list(settings.cors_origins),
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 
 def db():
-    path = Path(os.getenv("NEXUS_SERVER_DB", str(DEFAULT_DB_PATH)))
-    path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(path)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
-    conn.executescript("""
-        CREATE TABLE IF NOT EXISTS users(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            email TEXT NOT NULL UNIQUE,
-            username TEXT NOT NULL UNIQUE,
-            password_hash TEXT NOT NULL,
-            salt TEXT NOT NULL,
-            created_at TEXT NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS sessions(
-            token TEXT PRIMARY KEY,
-            user_id INTEGER NOT NULL,
-            expires_at TEXT NOT NULL,
-            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-        );
-        CREATE TABLE IF NOT EXISTS devices(
-            id TEXT PRIMARY KEY,
-            user_id INTEGER NOT NULL,
-            name TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            last_seen_at TEXT NOT NULL,
-            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-        );
-        CREATE TABLE IF NOT EXISTS refresh_tokens(
-            token TEXT PRIMARY KEY,
-            user_id INTEGER NOT NULL,
-            device_id TEXT NOT NULL,
-            expires_at TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
-            FOREIGN KEY(device_id) REFERENCES devices(id) ON DELETE CASCADE
-        );
-        CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user
-            ON refresh_tokens(user_id);
-        CREATE TABLE IF NOT EXISTS sync_records(
-            user_id INTEGER NOT NULL,
-            entity TEXT NOT NULL,
-            client_id TEXT NOT NULL,
-            payload TEXT NOT NULL,
-            updated_at TEXT NOT NULL,
-            deleted INTEGER NOT NULL DEFAULT 0,
-            PRIMARY KEY(user_id, entity, client_id),
-            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-        );
-        CREATE INDEX IF NOT EXISTS idx_sync_records_updated
-            ON sync_records(user_id, updated_at);
-    """)
-    conn.commit()
-    return conn
+    return connect()
 
 
 def now_utc() -> str:
@@ -90,11 +49,11 @@ def issue_tokens(user_id: int, device_id: str | None = None, device_name: str = 
     refresh_token = secrets.token_urlsafe(64)
     device_id = device_id or str(uuid.uuid4())
     now = now_utc()
-    access_expires = datetime.now(timezone.utc) + timedelta(days=TOKEN_TTL_DAYS)
+    access_expires = datetime.now(timezone.utc) + timedelta(minutes=TOKEN_TTL_MINUTES)
     refresh_expires = datetime.now(timezone.utc) + timedelta(days=REFRESH_TTL_DAYS)
     conn = db()
     conn.execute(
-        "INSERT OR IGNORE INTO devices(id,user_id,name,created_at,last_seen_at) VALUES(?,?,?,?,?)",
+        "INSERT INTO devices(id,user_id,name,created_at,last_seen_at) VALUES(?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name, last_seen_at=excluded.last_seen_at",
         (device_id, user_id, device_name.strip() or "NEXUS device", now, now),
     )
     conn.execute(
@@ -119,9 +78,12 @@ def current_user(credentials: HTTPAuthorizationCredentials = Depends(bearer)):
            WHERE s.token=? AND s.expires_at>?""",
         (credentials.credentials, now_utc()),
     ).fetchone()
-    conn.close()
     if not row:
+        conn.close()
         raise HTTPException(status_code=401, detail="Invalid or expired token")
+    conn.execute("UPDATE devices SET last_seen_at=? WHERE user_id=? AND id IN (SELECT device_id FROM refresh_tokens WHERE user_id=? LIMIT 1)", (now_utc(), row["id"], row["id"]))
+    conn.commit()
+    conn.close()
     return dict(row)
 
 
