@@ -2016,7 +2016,7 @@ class MainWindow(QMainWindow):
         except ValueError as error:
             self._message(str(error))
             return
-        except Exception:
+        except sqlite3.IntegrityError:
             self._message("That habit already exists.")
             return
         self.habit_input.clear()
