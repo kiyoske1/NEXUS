@@ -71,7 +71,7 @@ Double-click `build_windows.bat` or run it from a terminal. The packaged app wil
 
 ## Data and privacy
 
-The database is stored in your user home directory at `~/.nexus/nexus.db`. Your journal and finance entries are not uploaded anywhere by the app.
+The database is stored in your user home directory at `~/.nexus/nexus.db`. Your journal and finance entries stay local until you explicitly connect a cloud account and run sync. The desktop sync client talks to the configurable NEXUS API over HTTP(S). For production, deploy the API behind HTTPS.
 
 ## Repository structure
 
@@ -96,7 +96,8 @@ The database is stored in your user home directory at `~/.nexus/nexus.db`. Your 
 - [x] Calendar and richer analytics
 - [x] Dashboard polish, quick actions, levels, streaks, notifications, and activity history
 - [ ] Accessibility and responsive-layout pass
-- [ ] Desktop ↔ API sync client
+- [x] Desktop ↔ API sync client
+- [ ] Production cloud deployment with HTTPS and managed database
 - [ ] Google OAuth and mobile clients
 
 ## Project principles
