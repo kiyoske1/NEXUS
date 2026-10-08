@@ -897,6 +897,24 @@ class MainWindow(QMainWindow):
         if device_id == self.sync_client.device_id:
             QMessageBox.information(self, "Device", "This is the current device. Use Sign out all devices for a full reset.")
             return
+        name, ok = QInputDialog.getText(
+            self, "Rename device", "Device name:",
+            text=device.get("name", "NEXUS device"),
+        )
+        if ok:
+            name = name.strip()
+            if not name:
+                QMessageBox.warning(self, "Device", "Device name cannot be empty.")
+                return
+            try:
+                self.sync_client._request("PATCH", "/devices/" + device_id, {"name": name})
+            except SyncError as error:
+                QMessageBox.warning(self, "Devices", str(error))
+                return
+            self._refresh_cloud_devices()
+            self._message("Device name updated.")
+            return
+
         answer = QMessageBox.question(
             self,
             "Revoke device",
