@@ -186,6 +186,10 @@ class Database:
             ).fetchall()
             return [dict(row) for row in rows]
 
+    def delete_journal_entry(self, entry_id: int) -> None:
+        with self.connect() as db:
+            db.execute("DELETE FROM journal_entries WHERE id = ?", (entry_id,))
+
     def add_focus_session(self, duration_minutes: int) -> None:
         if duration_minutes < 1:
             raise ValueError("Duration must be positive")
