@@ -112,7 +112,7 @@ class Database:
                 db.execute(f"ALTER TABLE profile ADD COLUMN {name} {definition}")
 
     def _connect_accounts(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(self._accounts_index)
+        connection = sqlite3.connect(self._accounts_index, timeout=5.0)
         connection.row_factory = sqlite3.Row
         return connection
 
@@ -453,8 +453,8 @@ class Database:
         title, amount = title.strip(), float(amount)
         if not title:
             raise ValueError("Transaction title cannot be empty")
-        if amount <= 0:
-            raise ValueError("Amount must be greater than zero")
+        if not math.isfinite(amount) or amount <= 0:
+            raise ValueError("Amount must be a finite number greater than zero")
         if kind not in {"income", "expense"}:
             raise ValueError("Transaction kind must be income or expense")
         with self.connect() as db:
