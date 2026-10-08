@@ -22,3 +22,14 @@ def test_json_export_contains_all_data_tables(tmp_path):
     assert payload["app"] == "NEXUS"
     assert payload["data"]["transactions"][0]["title"] == "First client"
     assert "journal_entries" in payload["data"]
+
+
+def test_backup_cannot_overwrite_live_database(tmp_path):
+    db = Database(tmp_path / "source.db")
+    db.add_task("Do not lose this")
+    try:
+        create_backup(db, db.path)
+    except ValueError as error:
+        assert "different from the live database" in str(error)
+    else:
+        raise AssertionError("Expected backup destination guard")
