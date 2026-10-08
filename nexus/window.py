@@ -1,6 +1,8 @@
 """Main NEXUS desktop interface."""
 from __future__ import annotations
 
+import sqlite3
+
 from PySide6.QtCore import Qt, QTimer, QSettings, QDate
 from PySide6.QtGui import QFont, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
@@ -255,14 +257,21 @@ class MainWindow(QMainWindow):
         self.auth_username = QLineEdit()
         self.auth_username.setPlaceholderText("Username")
         self.auth_password = QLineEdit()
-        self.auth_password.setPlaceholderText("Password")
+        self.auth_password.setPlaceholderText("Password (6+ characters)")
         self.auth_password.setEchoMode(QLineEdit.EchoMode.Password)
+        self.auth_status = QLabel("")
+        self.auth_status.setObjectName("Muted")
+        self.auth_status.setWordWrap(True)
         create = QPushButton("Create account")
         create.setObjectName("Primary")
+        create.setMinimumHeight(46)
+        create.setDefault(True)
         create.clicked.connect(self._register_account)
+        self.auth_password.returnPressed.connect(self._register_account)
         for widget in (self.auth_name, self.auth_email, self.auth_username, self.auth_password, create):
             box.addWidget(widget)
-        note = QLabel("Local account is ready now. Google OAuth and cloud sync can be added later.")
+        box.addWidget(self.auth_status)
+        note = QLabel("Your account is stored locally on this PC. Cloud sync can be connected later.")
         note.setObjectName("Muted")
         note.setWordWrap(True)
         box.addWidget(note)
@@ -289,13 +298,36 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(root)
 
     def _register_account(self) -> None:
+        name = self.auth_name.text().strip()
+        email = self.auth_email.text().strip()
+        username = self.auth_username.text().strip()
+        password = self.auth_password.text()
+
+        self.auth_status.setText("")
+        if not name:
+            self.auth_status.setText("Enter your display name.")
+            self.auth_name.setFocus()
+            return
+        if "@" not in email or "." not in email.rsplit("@", 1)[-1]:
+            self.auth_status.setText("Enter a valid email address.")
+            self.auth_email.setFocus()
+            return
+        if not username:
+            self.auth_status.setText("Choose a username.")
+            self.auth_username.setFocus()
+            return
+        if len(password) < 6:
+            self.auth_status.setText("Password must be at least 6 characters.")
+            self.auth_password.setFocus()
+            return
+
         try:
-            if len(self.auth_password.text()) < 6:
-                raise ValueError("Password must be at least 6 characters")
-            self.db.save_profile(self.auth_name.text(), self.auth_email.text(), self.auth_username.text(), self.auth_password.text())
-            self._unlock_workspace()
-        except ValueError as error:
-            QMessageBox.warning(self, "NEXUS", str(error))
+            self.db.save_profile(name, email, username, password)
+        except Exception as error:
+            self.auth_status.setText(f"Could not create account: {error}")
+            return
+
+        self._unlock_workspace()
 
     def _login_account(self) -> None:
         if self.db.verify_profile_password(self.auth_password.text()):
