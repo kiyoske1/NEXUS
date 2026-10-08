@@ -47,7 +47,6 @@ def create_full_backup(database: Database, destination: str | Path) -> Path:
     """Create a portable archive containing the account registry and every local workspace."""
     target = Path(destination)
     target.parent.mkdir(parents=True, exist_ok=True)
-    live_paths = {database.path.expanduser().resolve(), database._accounts_index.expanduser().resolve()}
     account_paths = [Path(item["db_path"]) for item in database.list_accounts()]
     files: list[tuple[Path, str]] = []
     if database._accounts_index.exists():
@@ -55,7 +54,9 @@ def create_full_backup(database: Database, destination: str | Path) -> Path:
     for item in account_paths:
         if item.exists():
             files.append((item, f"accounts/workspaces/{item.name}"))
-    if database._explicit_path and database.path.exists() and database.path.resolve() not in {p.resolve() for p, _ in files}:
+    # Keep the original root database too. This preserves data from installations
+    # created before multi-account workspaces were introduced.
+    if database.path.exists() and database.path.resolve() not in {p.resolve() for p, _ in files}:
         files.append((database.path, f"legacy/{database.path.name}"))
 
     manifest = {
