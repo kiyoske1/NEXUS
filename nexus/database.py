@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import sqlite3
 import hashlib
+import math
 import secrets
 from datetime import date, datetime
 from pathlib import Path
@@ -24,7 +25,7 @@ class Database:
         self._initialize_account_registry()
 
     def connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(self.path)
+        connection = sqlite3.connect(self.path, timeout=5.0)
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA foreign_keys = ON")
         connection.execute("PRAGMA busy_timeout = 5000")
@@ -466,8 +467,8 @@ class Database:
         if kind not in {"income", "expense"}:
             raise ValueError("Transaction kind must be income or expense")
         amount = float(amount)
-        if amount <= 0:
-            raise ValueError("Amount must be greater than zero")
+        if not math.isfinite(amount) or amount <= 0:
+            raise ValueError("Amount must be a finite number greater than zero")
         with self.connect() as db:
             cursor = db.execute(
                 "INSERT INTO transactions(title, amount, kind, created_at) VALUES (?, ?, ?, ?)",
