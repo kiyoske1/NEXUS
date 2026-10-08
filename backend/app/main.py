@@ -5,6 +5,7 @@ import json
 import os
 import secrets
 import sqlite3
+import uuid
 
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -13,6 +14,7 @@ from pydantic import BaseModel, EmailStr, Field
 APP_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_DB_PATH = APP_DIR / "nexus_server.db"
 TOKEN_TTL_DAYS = 30
+REFRESH_TTL_DAYS = 90
 bearer = HTTPBearer(auto_error=False)
 app = FastAPI(title="NEXUS API", version="0.3.0")
 
@@ -39,6 +41,25 @@ def db():
             expires_at TEXT NOT NULL,
             FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
         );
+        CREATE TABLE IF NOT EXISTS devices(
+            id TEXT PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            last_seen_at TEXT NOT NULL,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS refresh_tokens(
+            token TEXT PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            device_id TEXT NOT NULL,
+            expires_at TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY(device_id) REFERENCES devices(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user
+            ON refresh_tokens(user_id);
         CREATE TABLE IF NOT EXISTS sync_records(
             user_id INTEGER NOT NULL,
             entity TEXT NOT NULL,
@@ -64,15 +85,29 @@ def hash_password(password: str, salt: str) -> str:
     return hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), 120_000).hex()
 
 
-def issue_token(user_id: int) -> str:
-    token = secrets.token_urlsafe(48)
-    expires = datetime.now(timezone.utc) + timedelta(days=TOKEN_TTL_DAYS)
+def issue_tokens(user_id: int, device_id: str | None = None, device_name: str = "NEXUS device") -> tuple[str, str, str]:
+    access_token = secrets.token_urlsafe(48)
+    refresh_token = secrets.token_urlsafe(64)
+    device_id = device_id or str(uuid.uuid4())
+    now = now_utc()
+    access_expires = datetime.now(timezone.utc) + timedelta(days=TOKEN_TTL_DAYS)
+    refresh_expires = datetime.now(timezone.utc) + timedelta(days=REFRESH_TTL_DAYS)
     conn = db()
-    conn.execute("INSERT INTO sessions(token,user_id,expires_at) VALUES(?,?,?)",
-                 (token, user_id, expires.isoformat()))
+    conn.execute(
+        "INSERT OR IGNORE INTO devices(id,user_id,name,created_at,last_seen_at) VALUES(?,?,?,?,?)",
+        (device_id, user_id, device_name.strip() or "NEXUS device", now, now),
+    )
+    conn.execute(
+        "INSERT INTO sessions(token,user_id,expires_at) VALUES(?,?,?)",
+        (access_token, user_id, access_expires.isoformat()),
+    )
+    conn.execute(
+        "INSERT INTO refresh_tokens(token,user_id,device_id,expires_at,created_at) VALUES(?,?,?,?,?)",
+        (refresh_token, user_id, device_id, refresh_expires.isoformat(), now),
+    )
     conn.commit()
     conn.close()
-    return token
+    return access_token, refresh_token, device_id
 
 
 def current_user(credentials: HTTPAuthorizationCredentials = Depends(bearer)):
@@ -95,11 +130,15 @@ class RegisterIn(BaseModel):
     email: EmailStr
     username: str
     password: str
+    device_id: str | None = None
+    device_name: str = "NEXUS desktop"
 
 
 class LoginIn(BaseModel):
     username_or_email: str
     password: str
+    device_id: str | None = None
+    device_name: str = "NEXUS desktop"
 
 
 class UserOut(BaseModel):
@@ -112,8 +151,22 @@ class UserOut(BaseModel):
 
 class TokenOut(BaseModel):
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
+    device_id: str
     user: UserOut
+
+
+class RefreshIn(BaseModel):
+    refresh_token: str = Field(min_length=20)
+    device_id: str | None = None
+
+
+class DeviceOut(BaseModel):
+    id: str
+    name: str
+    created_at: str
+    last_seen_at: str
 
 
 class SyncRecordIn(BaseModel):
@@ -155,7 +208,8 @@ def register(data: RegisterIn):
         conn.close()
         raise HTTPException(409, "Email or username already exists")
     conn.close()
-    return {"access_token": issue_token(user_id), "user": dict(row)}
+    access_token, refresh_token, device_id = issue_tokens(user_id, data.device_id, data.device_name)
+    return {"access_token": access_token, "refresh_token": refresh_token, "device_id": device_id, "user": dict(row)}
 
 
 @app.post("/auth/login", response_model=TokenOut)
@@ -171,14 +225,73 @@ def login(data: LoginIn):
         hash_password(data.password, row["salt"]), row["password_hash"]
     ):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid credentials")
-    return {"access_token": issue_token(row["id"]), "user": dict(row)}
+    access_token, refresh_token, device_id = issue_tokens(row["id"], data.device_id, data.device_name)
+    return {"access_token": access_token, "refresh_token": refresh_token, "device_id": device_id, "user": dict(row)}
+
+
+@app.post("/auth/refresh", response_model=TokenOut)
+def refresh(data: RefreshIn):
+    conn = db()
+    row = conn.execute(
+        """SELECT r.*, u.* FROM refresh_tokens r
+           JOIN users u ON u.id=r.user_id
+           WHERE r.token=? AND r.expires_at>?""",
+        (data.refresh_token, now_utc()),
+    ).fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid or expired refresh token")
+    if data.device_id and row["device_id"] != data.device_id:
+        conn.close()
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Refresh token device mismatch")
+    conn.execute("DELETE FROM refresh_tokens WHERE token=?", (data.refresh_token,))
+    conn.commit()
+    conn.close()
+    access_token, refresh_token, device_id = issue_tokens(
+        row["user_id"], row["device_id"], row["name"] or "NEXUS device"
+    )
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "device_id": device_id,
+        "user": dict(row),
+    }
+
+
+@app.get("/devices", response_model=list[DeviceOut])
+def devices(user=Depends(current_user)):
+    conn = db()
+    rows = conn.execute(
+        "SELECT id,name,created_at,last_seen_at FROM devices WHERE user_id=? ORDER BY last_seen_at DESC",
+        (user["id"],),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+@app.delete("/devices/{device_id}")
+def revoke_device(device_id: str, user=Depends(current_user)):
+    conn = db()
+    row = conn.execute(
+        "SELECT id FROM devices WHERE id=? AND user_id=?", (device_id, user["id"])
+    ).fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(404, "Device not found")
+    conn.execute("DELETE FROM devices WHERE id=? AND user_id=?", (device_id, user["id"]))
+    conn.commit()
+    conn.close()
+    return {"ok": True}
 
 
 @app.post("/auth/logout")
 def logout(credentials: HTTPAuthorizationCredentials = Depends(bearer)):
     if credentials:
         conn = db()
+        row = conn.execute("SELECT user_id FROM sessions WHERE token=?", (credentials.credentials,)).fetchone()
         conn.execute("DELETE FROM sessions WHERE token=?", (credentials.credentials,))
+        if row:
+            conn.execute("DELETE FROM refresh_tokens WHERE user_id=?", (row["user_id"],))
         conn.commit()
         conn.close()
     return {"ok": True}
