@@ -548,7 +548,7 @@ class MainWindow(QMainWindow):
             self.money_list.clear()
             for item in self.db.get_transactions():
                 sign = "+" if item["kind"] == "income" else "−"
-                self.money_list.addItem(f"{sign} {self._money(item['amount'])}   ·   {item['title']}   ·   {item['created_at'][:10]}")
+                self.money_list.addItem(f"{sign} {self._money(item['amount'])}   ·   {item['title']}   ·   {item['created_at'][:10]}   ·   #{item['id']}")
 
     def _apply_theme(self) -> None:
         themes = {
