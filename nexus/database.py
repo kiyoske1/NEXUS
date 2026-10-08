@@ -137,6 +137,27 @@ class Database:
                         (profile["name"], profile["email"], profile["username"], str(self.path), profile.get("created_at") or self.now()),
                     )
 
+    def streak_days(self) -> int:
+        with self.connect() as db:
+            rows = db.execute("""
+                SELECT DISTINCT DATE(completed_at) AS day FROM tasks
+                WHERE done = 1 AND completed_at IS NOT NULL
+                ORDER BY day DESC
+            """).fetchall()
+        days = {row["day"] for row in rows}
+        cursor = date.today()
+        streak = 0
+        while cursor.isoformat() in days:
+            streak += 1
+            cursor = date.fromordinal(cursor.toordinal() - 1)
+        return streak
+
+    def level_info(self) -> dict[str, int]:
+        xp = int(self.stats()["xp"])
+        level = max(1, xp // 500 + 1)
+        current = xp % 500
+        return {"level": level, "xp": xp, "current": current, "next": 500, "percent": int(current / 500 * 100)}
+
     def dashboard_summary(self) -> dict[str, Any]:
         today = date.today().isoformat()
         with self.connect() as db:
