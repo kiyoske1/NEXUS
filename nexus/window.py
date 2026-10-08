@@ -740,6 +740,9 @@ class MainWindow(QMainWindow):
         refresh_devices = QPushButton("↻  Refresh devices")
         refresh_devices.clicked.connect(self._refresh_cloud_devices)
         devices_row.addWidget(refresh_devices)
+        logout_all = QPushButton("⎋  Sign out all devices")
+        logout_all.clicked.connect(self._logout_all_cloud_devices)
+        devices_row.addWidget(logout_all)
         devices_row.addStretch(1)
         sync_box.addLayout(devices_row)
 
@@ -765,6 +768,30 @@ class MainWindow(QMainWindow):
         layout.addStretch(1)
         return page
 
+
+    def _logout_all_cloud_devices(self) -> None:
+        if not self.sync_client.token:
+            return
+        answer = QMessageBox.question(
+            self,
+            "Sign out all devices",
+            "This will invalidate every active NEXUS cloud session. Continue?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            self.sync_client._request("POST", "/auth/logout-all")
+        except SyncError as error:
+            QMessageBox.warning(self, "Sign out", str(error))
+            return
+        self.sync_client.token = ""
+        self.sync_client.refresh_token = ""
+        self._save_cloud_tokens("", "")
+        self.cloud_devices.clear()
+        self.cloud_devices.setVisible(False)
+        self._refresh_sync_status()
+        self._message("Signed out from all cloud devices.")
 
     def _refresh_cloud_devices(self) -> None:
         if not self.sync_client.token:
