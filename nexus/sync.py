@@ -142,11 +142,14 @@ class SyncClient:
         return result["user"]
 
     def logout(self) -> None:
-        if self.token:
-            try:
+        try:
+            if self.token:
                 self._request("POST", "/auth/logout")
-            finally:
-                self.token = ""
+        finally:
+            self.token = ""
+            self.refresh_token = ""
+            if self.token_saver:
+                self.token_saver("", "")
 
     def health(self) -> dict[str, Any]:
         return self._request("GET", "/health")
@@ -226,6 +229,12 @@ class SyncClient:
         now = _now()
         with self.database.connect() as db:
             for record in records:
+                if record.get("deleted"):
+                    db.execute(
+                        "DELETE FROM sync_meta WHERE entity=? AND client_id=?",
+                        (record["entity"], record["client_id"]),
+                    )
+                    continue
                 digest = self._hash(record["payload"])
                 local_id = int(record.get("local_id", -1))
                 db.execute(
@@ -236,6 +245,7 @@ class SyncClient:
                 )
             db.commit()
         return {"accepted": result.get("accepted", 0), "sent": len(records)}
+
 
     def _upsert_remote(self, entity: str, client_id: str, payload: dict[str, Any]) -> None:
         table = entity
