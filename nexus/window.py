@@ -582,6 +582,9 @@ class MainWindow(QMainWindow):
         hint = QLabel("Double-click an entry to read it.")
         hint.setObjectName("Muted")
         entries_layout.addWidget(hint)
+        delete_entry = QPushButton("Delete selected entry")
+        delete_entry.clicked.connect(self._delete_journal_entry)
+        entries_layout.addWidget(delete_entry)
         layout.addWidget(entries, 2)
         return page
     def refresh_all(self) -> None:
@@ -796,6 +799,22 @@ class MainWindow(QMainWindow):
             self.journal_list.addItem(f'{entry["title"]}   ·   {stamp}   ·   #{entry["id"]}')
         if not matches:
             self.journal_list.addItem("No matching entries yet.")
+
+    def _delete_journal_entry(self) -> None:
+        entry_id = self._selected_id(self.journal_list)
+        if entry_id is None:
+            self._message("Select a journal entry first.")
+            return
+        answer = QMessageBox.question(
+            self,
+            "Delete journal entry",
+            "Delete this entry permanently? This cannot be undone.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer == QMessageBox.StandardButton.Yes:
+            self.db.delete_journal_entry(entry_id)
+            self.refresh_all()
 
     def _backup_database(self) -> None:
         path, _ = QFileDialog.getSaveFileName(
