@@ -62,3 +62,17 @@ def test_sync_history_records_success_and_errors(tmp_path):
     assert history[0]["status"] == "error"
     assert "boom" in history[0]["error"]
     assert len(history) == 2
+
+
+def test_remote_sync_ignores_unknown_payload_columns(tmp_path):
+    db = Database(tmp_path / "remote-fields.db")
+    client = SyncClient(db, api_url="http://example.test", token="token")
+    client._upsert_remote("tasks", "remote-task-1", {
+        "title": "Remote quest",
+        "category": "Learning",
+        "xp": 30,
+        "created_at": "2026-10-09T00:00:00",
+        "not_a_real_column; DROP TABLE tasks; --": "ignored",
+    })
+    assert db.get_tasks()[0]["title"] == "Remote quest"
+    assert db.get_tasks()[0]["xp"] == 30
