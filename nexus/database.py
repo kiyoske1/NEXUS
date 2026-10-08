@@ -249,6 +249,10 @@ class Database:
                 (habit_id,),
             ).fetchall()
         completed_days = {row["log_date"] for row in rows}
+        # A streak remains alive until today is missed; yesterday's streak
+        # should still be visible before the user checks in today.
+        if current.isoformat() not in completed_days:
+            current -= timedelta(days=1)
         streak = 0
         while current.isoformat() in completed_days:
             streak += 1
