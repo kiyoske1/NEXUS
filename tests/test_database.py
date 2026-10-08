@@ -206,3 +206,13 @@ def test_sync_device_identity_is_stable(tmp_path):
     first = SyncClient(Database(path))
     second = SyncClient(Database(path))
     assert first.device_id == second.device_id
+
+def test_create_records_does_not_deadlock(tmp_path):
+    db = Database(tmp_path / "records.db")
+    task_id = db.add_task("Ship quest")
+    habit_id = db.add_habit("Read")
+    transaction_id = db.add_transaction("Salary", 100, "income")
+    assert any(row["id"] == task_id for row in db.get_tasks())
+    assert any(row["id"] == habit_id for row in db.get_habits())
+    assert any(row["id"] == transaction_id for row in db.get_transactions())
+    assert db.unread_notification_count() >= 2
