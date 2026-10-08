@@ -54,3 +54,20 @@ def test_journal_and_focus_are_persisted(db):
     db.add_focus_session(25)
     assert db.get_journal_entries()[0]["body"] == "Started building NEXUS"
     assert db.stats()["focus_minutes"] == 25
+
+
+def test_weekly_activity_includes_focus_minutes_for_today(db):
+    db.add_focus_session(25)
+    today = date.today().isoformat()
+    activity = db.weekly_activity()
+    assert len(activity) == 7
+    today_row = next(day for day in activity if day["date"] == today)
+    assert today_row["focus"] == 25
+
+
+def test_habit_streak_counts_consecutive_days(db):
+    habit_id = db.add_habit("Walk")
+    end = date(2026, 1, 5)
+    for day in (date(2026, 1, 3), date(2026, 1, 4), end):
+        db.toggle_habit(habit_id, day.isoformat())
+    assert db.habit_streak(habit_id, end) == 3
