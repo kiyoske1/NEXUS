@@ -1,0 +1,15 @@
+services:
+  api:
+    build: .
+    restart: unless-stopped
+    environment:
+      NEXUS_DATABASE_URL: sqlite:////data/nexus_server.db
+      NEXUS_JWT_SECRET: ${NEXUS_JWT_SECRET:?set-a-long-random-secret}
+      NEXUS_CORS_ORIGINS: ${NEXUS_CORS_ORIGINS:-}
+    ports:
+      - "8000:8000"
+    volumes:
+      - nexus_data:/data
+
+volumes:
+  nexus_data:
