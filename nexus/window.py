@@ -393,7 +393,16 @@ class MainWindow(QMainWindow):
         list_card = panel()
         list_layout = QVBoxLayout(list_card)
         list_layout.setContentsMargins(17, 15, 17, 15)
-        list_layout.addWidget(heading("Your quest board", "Section"))
+        quest_header = QHBoxLayout()
+        quest_header.addWidget(heading("Your quest board", "Section"))
+        quest_header.addStretch(1)
+        self.task_filter = QComboBox()
+        self.task_filter.addItem("All quests", "all")
+        self.task_filter.addItem("Open only", "open")
+        self.task_filter.addItem("Completed", "done")
+        self.task_filter.currentIndexChanged.connect(self._refresh_task_list)
+        quest_header.addWidget(self.task_filter)
+        list_layout.addLayout(quest_header)
         self.task_list = QListWidget()
         list_layout.addWidget(self.task_list, 1)
         actions = QHBoxLayout()
@@ -603,10 +612,7 @@ class MainWindow(QMainWindow):
         self.daily_progress.setValue(pct)
         self.progress_copy.setText(f'{stats["tasks_done"]} of {total} quests completed overall · {stats["focus_minutes"]} focus minutes logged')
         if hasattr(self, "task_list"):
-            self.task_list.clear()
-            for task in self.db.get_tasks():
-                mark = "✓" if task["done"] else "○"
-                self.task_list.addItem(f'{mark}  {task["title"]}   ·   {task["category"]}   ·   {task["xp"]} XP   ·   #{task["id"]}')
+            self._refresh_task_list()
         if hasattr(self, "habit_list"):
             self.habit_list.clear()
             for habit in self.db.get_habits():
@@ -621,6 +627,23 @@ class MainWindow(QMainWindow):
                 self.money_list.addItem(f'{sign} {item["amount"]:.2f}   ·   {item["title"]}   ·   {item["created_at"][:10]}')
         if hasattr(self, "journal_list"):
             self._filter_journal_entries()
+
+    def _refresh_task_list(self) -> None:
+        if not hasattr(self, "task_list"):
+            return
+        mode = self.task_filter.currentData() if hasattr(self, "task_filter") else "all"
+        tasks = self.db.get_tasks()
+        if mode == "open":
+            tasks = [task for task in tasks if not task["done"]]
+        elif mode == "done":
+            tasks = [task for task in tasks if task["done"]]
+        self.task_list.clear()
+        for task in tasks:
+            mark = "✓" if task["done"] else "○"
+            self.task_list.addItem(f'{mark}  {task["title"]}   ·   {task["category"]}   ·   {task["xp"]} XP   ·   #{task["id"]}')
+        if not tasks:
+            empty = "No open quests. Enjoy the breathing room." if mode == "open" else "No completed quests yet." if mode == "done" else "Your quest board is clear. Add the first one."
+            self.task_list.addItem(empty)
 
     def _selected_id(self, widget: QListWidget) -> int | None:
         item = widget.currentItem()
