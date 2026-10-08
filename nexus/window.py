@@ -971,7 +971,7 @@ class MainWindow(QMainWindow):
         def preview(title: str, payload: dict) -> QTextEdit:
             box = QTextEdit()
             box.setReadOnly(True)
-            box.setPlainText(json.dumps(payload, ensure_ascii=False, indent=2, default=str))
+            box.setPlainText(repr(payload))
             box.setPlaceholderText(title)
             return box
 
