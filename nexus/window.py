@@ -148,7 +148,10 @@ class MainWindow(QMainWindow):
         self._show_auth_gate_if_needed()
         self._apply_language()
         self._apply_currency()
-        self.refresh_all()
+        # Do not refresh the workspace while the auth gate is displayed.
+        # The auth screen replaces the shell's central widget.
+        if self.db.get_profile():
+            self.refresh_all()
 
     def _build_shell(self) -> None:
         root = QWidget()
@@ -1233,8 +1236,9 @@ class MainWindow(QMainWindow):
     def _on_cloud_tokens_refreshed(self, access_token: str, refresh_token: str) -> None:
         self.sync_client.token = access_token
         self.sync_client.refresh_token = refresh_token
-        save_secret(self.settings, "cloud_access_token", access_token)
-        save_secret(self.settings, "cloud_refresh_token", refresh_token)
+        # Save tokens under the currently unlocked workspace. Never fall back
+        # to the legacy global keys, otherwise accounts can share sessions.
+        self._save_cloud_tokens(access_token, refresh_token)
 
     def _on_background_sync_finished(self, result: dict) -> None:
         self._cloud_sync_running = False
