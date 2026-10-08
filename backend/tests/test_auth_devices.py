@@ -1,3 +1,9 @@
+import os
+import tempfile
+
+DB_FILE = tempfile.NamedTemporaryFile(suffix=".db", delete=False).name
+os.environ["NEXUS_SERVER_DB"] = DB_FILE
+
 from backend.app.main import app
 from fastapi.testclient import TestClient
 
@@ -39,3 +45,10 @@ def test_refresh_rotation_and_device_revoke():
     after_revoke = client.get("/devices", headers=headers)
     assert after_revoke.status_code == 200
     assert all(item["id"] != device_id for item in after_revoke.json())
+
+
+def teardown_module():
+    try:
+        os.remove(DB_FILE)
+    except FileNotFoundError:
+        pass
