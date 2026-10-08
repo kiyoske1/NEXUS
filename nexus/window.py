@@ -345,7 +345,16 @@ class MainWindow(QMainWindow):
             self.auth_password.setFocus()
 
     def _unlock_workspace(self) -> None:
-        self.setCentralWidget(self._app_root)
+        # The auth screen replaces QMainWindow's central widget. Qt owns and
+        # deletes the previous widget, so the cached _app_root is no longer
+        # safe to reuse after login. Rebuild the workspace shell instead.
+        for shortcut in getattr(self, "_shortcuts", []):
+            shortcut.deleteLater()
+        self._shortcuts = []
+        self._build_shell()
+        self._apply_theme()
+        self._apply_language()
+        self._apply_currency()
         self.refresh_all()
 
     def _calendar_page(self) -> QWidget:
