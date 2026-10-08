@@ -75,6 +75,19 @@ class Database:
                     completed_at TEXT NOT NULL
                 );
             """)
+            self._migrate_profile_schema(db)
+
+    @staticmethod
+    def _migrate_profile_schema(db: sqlite3.Connection) -> None:
+        columns = {row["name"] for row in db.execute("PRAGMA table_info(profile)").fetchall()}
+        required = {
+            "password_hash": "TEXT NOT NULL DEFAULT ''",
+            "salt": "TEXT NOT NULL DEFAULT ''",
+            "created_at": "TEXT NOT NULL DEFAULT ''",
+        }
+        for name, definition in required.items():
+            if name not in columns:
+                db.execute(f"ALTER TABLE profile ADD COLUMN {name} {definition}")
 
     @staticmethod
     def now() -> str:
