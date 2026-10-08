@@ -730,6 +730,14 @@ class MainWindow(QMainWindow):
         self.sync_status = QLabel()
         self.sync_status.setObjectName("Muted")
         sync_box.addWidget(self.sync_status)
+        self.sync_progress = QProgressBar()
+        self.sync_progress.setRange(0, 0)
+        self.sync_progress.setMaximumHeight(5)
+        self.sync_progress.setVisible(False)
+        sync_box.addWidget(self.sync_progress)
+        self.sync_stats_label = QLabel("↑ 0 pushed  ·  ↓ 0 pulled")
+        self.sync_stats_label.setObjectName("Tiny")
+        sync_box.addWidget(self.sync_stats_label)
         self.cloud_profile_label = QLabel("Cloud profile: not connected")
         self.cloud_profile_label.setObjectName("Muted")
         sync_box.addWidget(self.cloud_profile_label)
@@ -747,6 +755,7 @@ class MainWindow(QMainWindow):
         cloud_sync = QPushButton("↻  Sync now")
         cloud_sync.setObjectName("Primary")
         cloud_sync.clicked.connect(self._cloud_sync)
+        self.cloud_sync_button = cloud_sync
         cloud_disconnect = QPushButton("Disconnect")
         cloud_disconnect.clicked.connect(self._disconnect_cloud)
         sync_row.addWidget(cloud_connect)
@@ -924,6 +933,34 @@ class MainWindow(QMainWindow):
         except SyncError as error:
             self._message(str(error))
 
+    def _set_sync_center_state(self, state: str, result: dict | None = None) -> None:
+        if not hasattr(self, "sync_progress"):
+            return
+        connected = bool(self.sync_client.token)
+        if state == "syncing":
+            self.sync_progress.setVisible(True)
+            self.sync_status.setText("●  Syncing cloud data…")
+            self.cloud_sync_button.setEnabled(False)
+            self.cloud_sync_button.setText("↻  Syncing…")
+            return
+        self.sync_progress.setVisible(False)
+        self.cloud_sync_button.setEnabled(True)
+        self.cloud_sync_button.setText("↻  Sync now")
+        if state == "offline":
+            self.sync_status.setText("○  Offline · will retry automatically")
+            return
+        if not connected:
+            self.sync_status.setText("○  Cloud not connected")
+            return
+        self.sync_status.setText("●  Connected")
+        if result:
+            self.sync_stats_label.setText(
+                f"↑ {result.get('pushed', 0)} pushed  ·  ↓ {result.get('pulled', 0)} pulled"
+            )
+        self.last_sync_label.setText(
+            f"Last sync: {self.sync_client.last_sync_at or 'never'}"
+        )
+
     def _background_cloud_sync(self) -> None:
         if (
             not self.sync_client.token
@@ -932,6 +969,7 @@ class MainWindow(QMainWindow):
         ):
             return
         self._cloud_sync_running = True
+        self._set_sync_center_state("syncing")
         self._cloud_worker = CloudSyncWorker(self.sync_client)
         self._cloud_worker.finished.connect(self._on_background_sync_finished)
         self._cloud_worker.failed.connect(self._on_background_sync_failed)
@@ -941,12 +979,14 @@ class MainWindow(QMainWindow):
 
     def _on_background_sync_finished(self, result: dict) -> None:
         self._cloud_sync_running = False
+        self._set_sync_center_state("connected", result)
         self._refresh_sync_status()
         self.refresh_all()
 
     def _on_background_sync_failed(self, message: str) -> None:
         self._cloud_sync_running = False
         if self.sync_client.token:
+            self._set_sync_center_state("offline")
             self._refresh_sync_status()
 
     def _cleanup_cloud_worker(self, *_args) -> None:
