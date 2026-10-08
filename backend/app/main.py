@@ -57,8 +57,8 @@ def issue_tokens(user_id: int, device_id: str | None = None, device_name: str = 
         (device_id, user_id, device_name.strip() or "NEXUS device", now, now),
     )
     conn.execute(
-        "INSERT INTO sessions(token,user_id,expires_at) VALUES(?,?,?)",
-        (access_token, user_id, access_expires.isoformat()),
+        "INSERT INTO sessions(token,user_id,device_id,expires_at) VALUES(?,?,?,?)",
+        (access_token, user_id, device_id, access_expires.isoformat()),
     )
     conn.execute(
         "INSERT INTO refresh_tokens(token,user_id,device_id,expires_at,created_at) VALUES(?,?,?,?,?)",
@@ -74,17 +74,24 @@ def current_user(credentials: HTTPAuthorizationCredentials = Depends(bearer)):
         raise HTTPException(status_code=401, detail="Authentication required")
     conn = db()
     row = conn.execute(
-        """SELECT u.* FROM users u JOIN sessions s ON s.user_id=u.id
+        """SELECT u.*, s.device_id AS session_device_id FROM users u
+           JOIN sessions s ON s.user_id=u.id
            WHERE s.token=? AND s.expires_at>?""",
         (credentials.credentials, now_utc()),
     ).fetchone()
     if not row:
         conn.close()
         raise HTTPException(status_code=401, detail="Invalid or expired token")
-    conn.execute("UPDATE devices SET last_seen_at=? WHERE user_id=? AND id IN (SELECT device_id FROM refresh_tokens WHERE user_id=? LIMIT 1)", (now_utc(), row["id"], row["id"]))
-    conn.commit()
+    if row["session_device_id"]:
+        conn.execute(
+            "UPDATE devices SET last_seen_at=? WHERE id=? AND user_id=?",
+            (now_utc(), row["session_device_id"], row["id"]),
+        )
+        conn.commit()
+    user = dict(row)
+    user.pop("session_device_id", None)
     conn.close()
-    return dict(row)
+    return user
 
 
 class RegisterIn(BaseModel):
@@ -240,6 +247,8 @@ def revoke_device(device_id: str, user=Depends(current_user)):
     if not row:
         conn.close()
         raise HTTPException(404, "Device not found")
+    conn.execute("DELETE FROM sessions WHERE user_id=? AND device_id=?", (user["id"], device_id))
+    conn.execute("DELETE FROM refresh_tokens WHERE user_id=? AND device_id=?", (user["id"], device_id))
     conn.execute("DELETE FROM devices WHERE id=? AND user_id=?", (device_id, user["id"]))
     conn.commit()
     conn.close()
@@ -258,14 +267,21 @@ def logout_all(user=Depends(current_user)):
 
 @app.post("/auth/logout")
 def logout(credentials: HTTPAuthorizationCredentials = Depends(bearer)):
-    if credentials:
-        conn = db()
-        row = conn.execute("SELECT user_id FROM sessions WHERE token=?", (credentials.credentials,)).fetchone()
-        conn.execute("DELETE FROM sessions WHERE token=?", (credentials.credentials,))
-        if row:
-            conn.execute("DELETE FROM refresh_tokens WHERE user_id=?", (row["user_id"],))
-        conn.commit()
-        conn.close()
+    if not credentials:
+        return {"ok": True}
+    conn = db()
+    row = conn.execute(
+        "SELECT user_id, device_id FROM sessions WHERE token=?",
+        (credentials.credentials,),
+    ).fetchone()
+    conn.execute("DELETE FROM sessions WHERE token=?", (credentials.credentials,))
+    if row and row["device_id"]:
+        conn.execute(
+            "DELETE FROM refresh_tokens WHERE user_id=? AND device_id=?",
+            (row["user_id"], row["device_id"]),
+        )
+    conn.commit()
+    conn.close()
     return {"ok": True}
 
 
