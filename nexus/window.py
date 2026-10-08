@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import sqlite3
+from datetime import datetime, timezone
 
 from PySide6.QtCore import Qt, QTimer, QSettings, QDate, QThread, Signal
 from PySide6.QtGui import QFont, QKeySequence, QShortcut
@@ -778,7 +779,9 @@ class MainWindow(QMainWindow):
         devices_label.setObjectName("Tiny")
         sync_box.addWidget(devices_label)
         self.cloud_devices = QListWidget()
-        self.cloud_devices.setMaximumHeight(135)
+        self.cloud_devices.setMaximumHeight(220)
+        self.cloud_devices.setSelectionMode(QListWidget.SelectionMode.SingleSelection)
+        self.cloud_devices.itemDoubleClicked.connect(self._manage_selected_device)
         self.cloud_devices.setVisible(False)
         sync_box.addWidget(self.cloud_devices)
         devices_row = QHBoxLayout()
@@ -854,10 +857,51 @@ class MainWindow(QMainWindow):
             current = "  ·  THIS DEVICE" if device.get("id") == self.sync_client.device_id else ""
             item = QListWidgetItem(
                 f"{device.get('name', 'NEXUS device')}{current}\n"
-                f"Last seen: {device.get('last_seen_at', 'unknown')}"
+                f"{self._device_status(device.get('last_seen_at', ''))}  ·  Last seen: {device.get('last_seen_at', 'unknown')}"
             )
+            item.setData(Qt.ItemDataRole.UserRole, device)
             self.cloud_devices.addItem(item)
         self.cloud_devices.setVisible(bool(devices))
+
+    @staticmethod
+    def _device_status(last_seen: str) -> str:
+        if not last_seen:
+            return "○ Unknown"
+        try:
+            seen = datetime.fromisoformat(last_seen.replace("Z", "+00:00"))
+            age = (datetime.now(timezone.utc) - seen).total_seconds()
+            if age < 120:
+                return "● Online"
+            if age < 900:
+                return "◐ Recently active"
+            return "○ Offline"
+        except (ValueError, TypeError):
+            return "○ Unknown"
+
+    def _manage_selected_device(self, item: QListWidgetItem) -> None:
+        device = item.data(Qt.ItemDataRole.UserRole) or {}
+        device_id = device.get("id")
+        if not device_id:
+            return
+        if device_id == self.sync_client.device_id:
+            QMessageBox.information(self, "Device", "This is the current device. Use Sign out all devices for a full reset.")
+            return
+        answer = QMessageBox.question(
+            self,
+            "Revoke device",
+            f"Revoke access for “{device.get('name', 'NEXUS device')}”?\n\n"
+            "Its active sessions and refresh tokens will be invalidated.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            self.sync_client._request("DELETE", f"/devices/{device_id}")
+        except SyncError as error:
+            QMessageBox.warning(self, "Devices", str(error))
+            return
+        self._refresh_cloud_devices()
+        self._message(f"Device access revoked: {device.get('name', 'NEXUS device')}.")
 
     def _save_cloud_tokens(self, access_token: str, refresh_token: str) -> None:
         if access_token:
