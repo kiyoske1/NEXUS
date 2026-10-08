@@ -357,9 +357,9 @@ class Database:
                 (title, category.strip() or "Personal", max(1, int(xp)), self.now()),
             )
             task_id = int(cursor.lastrowid)
-            self.log_activity("Quest created", title)
-            self.add_notification("New quest added", title, "info")
-            return task_id
+        self.log_activity("Quest created", title)
+        self.add_notification("New quest added", title, "info")
+        return task_id
 
     def get_tasks(self, include_done: bool = True) -> list[dict[str, Any]]:
         query = "SELECT * FROM tasks"
@@ -409,9 +409,9 @@ class Database:
                 (title, self.now()),
             )
             habit_id = int(cursor.lastrowid)
-            self.log_activity("Habit created", title)
-            self.add_notification("Habit added", title, "info")
-            return habit_id
+        self.log_activity("Habit created", title)
+        self.add_notification("Habit added", title, "info")
+        return habit_id
 
     def get_habits(self, on_date: str | None = None) -> list[dict[str, Any]]:
         day = on_date or date.today().isoformat()
@@ -472,8 +472,8 @@ class Database:
                 (title, round(amount, 2), kind, self.now()),
             )
             transaction_id = int(cursor.lastrowid)
-            self.log_activity("Finance entry added", title)
-            return transaction_id
+        self.log_activity("Finance entry added", title)
+        return transaction_id
 
     def get_transactions(self, limit: int = 50) -> list[dict[str, Any]]:
         with self.connect() as db:
@@ -504,8 +504,8 @@ class Database:
                 (title or "Untitled", body, self.now()),
             )
             entry_id = int(cursor.lastrowid)
-            self.log_activity("Journal entry created", title or "Untitled")
-            return entry_id
+        self.log_activity("Journal entry created", title or "Untitled")
+        return entry_id
 
     def get_journal_entries(self, limit: int = 50) -> list[dict[str, Any]]:
         with self.connect() as db:
