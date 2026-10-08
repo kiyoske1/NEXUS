@@ -224,3 +224,15 @@ def test_focus_sessions_can_be_loaded_by_day(db):
     assert len(sessions) == 1
     assert sessions[0]["duration_minutes"] == 25
     assert db.get_focus_sessions("1999-01-01") == []
+
+
+def test_transactions_reject_non_finite_amounts(db):
+    for amount in (float("nan"), float("inf"), float("-inf")):
+        with pytest.raises(ValueError):
+            db.add_transaction("Invalid amount", amount, "expense")
+
+
+def test_database_connection_uses_busy_timeout(db):
+    with db.connect() as connection:
+        timeout = connection.execute("PRAGMA busy_timeout").fetchone()[0]
+    assert timeout >= 5000
