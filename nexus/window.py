@@ -1220,6 +1220,8 @@ class MainWindow(QMainWindow):
         level = self.db.level_info()
         streak = self.db.streak_days()
         self.hero_xp_label.setText(f'LVL {level["level"]}  ·  {stats["xp"]} XP')
+        if hasattr(self, "level_copy"):
+            self.level_copy.setText(f'Level {level["level"]}  ·  {level["current"]}/{level["next"]} XP to next level  ·  {self.db.streak_days()} day streak')
         if hasattr(self, "level_progress"):
             self.level_progress.setValue(level["percent"])
             self.level_copy.setText(f'Level {level["level"]} · {level["current"]}/{level["next"]} XP · {streak} day streak')
