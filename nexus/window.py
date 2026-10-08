@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
 )
 
 from nexus.database import Database
-from nexus.backup import create_backup, export_json
+from nexus.backup import create_backup, create_full_backup, export_json
 from nexus.charts import WeeklyActivityChart
 
 
@@ -1381,13 +1381,20 @@ class MainWindow(QMainWindow):
 
     def _backup_database(self) -> None:
         path, _ = QFileDialog.getSaveFileName(
-            self, "Create NEXUS backup", "nexus-backup.db", "SQLite database (*.db)"
+            self,
+            "Create NEXUS backup",
+            "nexus-backup.nexus.zip",
+            "NEXUS backup (*.nexus.zip);;SQLite database (*.db)",
         )
         if not path:
             return
         try:
-            create_backup(self.db, path)
-            self._message("Backup created successfully.")
+            if path.lower().endswith(".nexus.zip"):
+                create_full_backup(self.db, path)
+                self._message("Full backup created. Account registry and local workspaces are included.")
+            else:
+                create_backup(self.db, path)
+                self._message("Workspace backup created successfully.")
         except Exception as error:
             self._message(f"Backup failed: {error}")
 
