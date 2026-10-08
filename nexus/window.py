@@ -287,7 +287,7 @@ class MainWindow(QMainWindow):
             "Personalize NEXUS":"Personalizează NEXUS","Your profile":"Profilul tău","Save profile":"Salvează profilul","Display name":"Nume","Email":"Email","Username":"Utilizator","Profile saved.":"Profil salvat.","Appearance":"Aspect","Interface language":"Limba interfeței","Currency":"Valută",
             
             "quest":"sarcină","quests":"sarcini","left to move forward.":"până la următorul pas.","habits complete":"obiceiuri finalizate","quests completed overall":"sarcini finalizate în total","focus minutes logged":"minute de focus",
-            "No open quests. Enjoy the breathing room.":"Nu ai sarcini deschise. Poți respira.","No completed quests yet.":"Nu există sarcini finalizate.","Your quest board is clear. Addă prima.",
+            "No open quests. Enjoy the breathing room.":"Nu ai sarcini deschise. Poți respira.","No completed quests yet.":"Nu există sarcini finalizate.","Your quest board is clear. Addă prima.":"Panoul de sarcini este gol. Adaugă prima.",
             "Edit quest":"Editează sarcina","Edit habit":"Editează obiceiul","Edit transaction":"Editează operația","Edit note":"Editează nota",
             "You're building consistency.":"Îți construiești consecvența.","Add one small habit to begin.":"Adaugă un obicei mic.",
             "Your next win is waiting.":"Următoarea victorie te așteaptă.","No open quests. Add a small win.":"Nu ai sarcini deschise. Adaugă o mică victorie.",
