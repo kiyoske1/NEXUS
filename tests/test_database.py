@@ -71,3 +71,11 @@ def test_habit_streak_counts_consecutive_days(db):
     for day in (date(2026, 1, 3), date(2026, 1, 4), end):
         db.toggle_habit(habit_id, day.isoformat())
     assert db.habit_streak(habit_id, end) == 3
+
+
+def test_habit_streak_survives_until_today_is_missed(db):
+    habit_id = db.add_habit("Stretch")
+    yesterday = date(2026, 2, 10)
+    db.toggle_habit(habit_id, yesterday.isoformat())
+    assert db.habit_streak(habit_id, date(2026, 2, 11)) == 1
+    assert db.habit_streak(habit_id, date(2026, 2, 12)) == 0
