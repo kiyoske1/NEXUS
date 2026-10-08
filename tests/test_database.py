@@ -4,6 +4,7 @@ from datetime import date
 import pytest
 
 from nexus.database import Database
+from nexus.sync import SyncClient
 
 
 @pytest.fixture
@@ -189,3 +190,19 @@ def test_transaction_can_be_deleted(tmp_path):
     assert len(db.get_transactions()) == 1
     db.delete_transaction(transaction_id)
     assert db.get_transactions() == []
+
+def test_sync_device_identity_isolated_per_workspace(tmp_path):
+    first = Database(tmp_path / "first.db")
+    second = Database(tmp_path / "second.db")
+    first_sync = SyncClient(first)
+    second_sync = SyncClient(second)
+    assert first_sync.device_id != second_sync.device_id
+    assert (tmp_path / "first.db.device_id").exists()
+    assert (tmp_path / "second.db.device_id").exists()
+
+
+def test_sync_device_identity_is_stable(tmp_path):
+    path = tmp_path / "stable.db"
+    first = SyncClient(Database(path))
+    second = SyncClient(Database(path))
+    assert first.device_id == second.device_id
