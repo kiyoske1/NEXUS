@@ -235,7 +235,7 @@ class Database:
 
     def get_profile(self) -> dict[str, Any] | None:
         with self.connect() as db:
-            row = db.execute("SELECT id, name, email, username, created_at FROM profile WHERE id = 1").fetchone()
+            row = db.execute("SELECT id, name, email, username, password_hash, created_at FROM profile WHERE id = 1").fetchone()
             return dict(row) if row else None
 
     def save_profile(self, name: str, email: str, username: str, password: str = "") -> None:
