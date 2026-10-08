@@ -37,6 +37,8 @@ QLabel#MetricAccent { font-size: 28px; font-weight: 800; color: #c7f36b; }
 QLabel#Section { font-size: 15px; font-weight: 750; color: #f4f2fc; }
 QLabel#Tiny { color: #8d8e9d; font-size: 10px; font-weight: 700; letter-spacing: 1px; }
 QLabel#Pill { background: #22242e; color: #b8b1e5; border: 1px solid #343346; border-radius: 9px; padding: 6px 9px; font-size: 10px; font-weight: 700; }
+QLabel#StatusGood { color: #c7f36b; font-size: 11px; font-weight: 800; }
+QLabel#StatusWarn { color: #e7b8ff; font-size: 11px; font-weight: 800; }
 QLabel#AccentText { color: #191d12; }
 QPushButton { background: #20212b; color: #e9e8f1; border: 1px solid #30313e; border-radius: 10px; padding: 10px 13px; text-align: left; }
 QPushButton:hover { background: #2b2c39; border-color: #7d78a9; }
@@ -1230,7 +1232,11 @@ class MainWindow(QMainWindow):
         self.focus_minutes_copy.setText(f'{stats["focus_minutes"]} min')
         self._refresh_dashboard_summary()
         if hasattr(self, "streak_badge"):
-            self.streak_badge.setText(f'{self.db.streak_days()} DAY STREAK')
+            streak = self.db.streak_days()
+            self.streak_badge.setText(f'{streak} DAY STREAK')
+            self.streak_badge.setObjectName("StatusGood" if streak else "StatusWarn")
+            self.streak_badge.style().unpolish(self.streak_badge)
+            self.streak_badge.style().polish(self.streak_badge)
         if hasattr(self, "notification_button"):
             unread = self.db.unread_notification_count()
             self.notification_button.setText(f"◉  {unread}")
