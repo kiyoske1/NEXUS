@@ -14,7 +14,7 @@ APP_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_DB_PATH = APP_DIR / "nexus_server.db"
 TOKEN_TTL_DAYS = 30
 bearer = HTTPBearer(auto_error=False)
-app = FastAPI(title="NEXUS API", version="0.2.0")
+app = FastAPI(title="NEXUS API", version="0.3.0")
 
 
 def db():
