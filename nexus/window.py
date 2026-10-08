@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
 
 from nexus.database import Database
 from nexus.backup import create_backup, export_json
+from nexus.charts import WeeklyActivityChart
 
 
 STYLES = """
@@ -342,10 +343,17 @@ class MainWindow(QMainWindow):
         self.progress_copy.setWordWrap(True)
         self.progress_copy.setObjectName("Muted")
         pl.addWidget(self.progress_copy)
+        pl.addSpacing(2)
+        pl.addWidget(heading("LAST 7 DAYS", "Tiny"))
+        self.activity_chart = WeeklyActivityChart()
+        pl.addWidget(self.activity_chart)
         pl.addStretch(1)
-        pl.addWidget(heading("FOCUS MINUTES", "Tiny"))
+        focus_line = QHBoxLayout()
+        focus_line.addWidget(heading("FOCUS MINUTES", "Tiny"))
+        focus_line.addStretch(1)
         self.focus_minutes_copy = heading("0 min", "MetricAccent")
-        pl.addWidget(self.focus_minutes_copy)
+        focus_line.addWidget(self.focus_minutes_copy)
+        pl.addLayout(focus_line)
         bottom.addWidget(progress_card, 3)
         layout.addLayout(bottom, 1)
         return page
@@ -579,6 +587,7 @@ class MainWindow(QMainWindow):
         self.habits_copy.setText(f'{stats["habits_done"]} of {stats["habits_total"]} habits complete')
         self.overview_habits.setText("You're building consistency." if stats["habits_total"] else "Add one small habit to begin.")
         self.focus_minutes_copy.setText(f'{stats["focus_minutes"]} min')
+        self.activity_chart.set_data(self.db.weekly_activity())
         pending = self.db.get_tasks(include_done=False)
         self.overview_tasks.clear()
         for task in pending[:5]:
@@ -598,7 +607,9 @@ class MainWindow(QMainWindow):
             self.habit_list.clear()
             for habit in self.db.get_habits():
                 mark = "✓" if habit["done"] else "○"
-                self.habit_list.addItem(f'{mark}  {habit["title"]}   ·   #{habit["id"]}')
+                streak = self.db.habit_streak(habit["id"])
+                streak_copy = f"🔥 {streak}d" if streak else "Start a streak"
+                self.habit_list.addItem(f'{mark}  {habit["title"]}   ·   {streak_copy}   ·   #{habit["id"]}')
         if hasattr(self, "money_list"):
             self.money_list.clear()
             for item in self.db.get_transactions():
