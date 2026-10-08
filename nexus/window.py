@@ -644,6 +644,11 @@ class MainWindow(QMainWindow):
     def _switch_account(self) -> None:
         answer = QMessageBox.question(self, "Switch account", "Return to the account chooser?\n\nYour local NEXUS data will remain on this PC.", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.Yes)
         if answer == QMessageBox.StandardButton.Yes:
+            # Auth screens replace the central widget. Remove workspace shortcuts
+            # first so repeated account switches cannot stack duplicate hotkeys.
+            for shortcut in getattr(self, "_shortcuts", []):
+                shortcut.deleteLater()
+            self._shortcuts = []
             self._show_auth_choice()
 
     def _save_profile(self) -> None:
