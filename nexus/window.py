@@ -1,6 +1,7 @@
 """Main NEXUS desktop interface."""
 from __future__ import annotations
 
+import hashlib
 import sqlite3
 from datetime import datetime, timezone
 
@@ -124,7 +125,11 @@ class MainWindow(QMainWindow):
         self.currency = self.settings.value("currency", "RUB")
         self.language = self.settings.value("language", "English")
         self.theme = self.settings.value("theme", "NEXUS Lime")
-        self.sync_client = SyncClient(self.db, api_url=self.settings.value("cloud_api_url", "http://127.0.0.1:8000"), token=load_secret(self.settings, "cloud_access_token"), refresh_token=load_secret(self.settings, "cloud_refresh_token"), token_saver=self._save_cloud_tokens)
+        self.sync_client = SyncClient(
+            self.db,
+            api_url=self.settings.value("cloud_api_url", "http://127.0.0.1:8000"),
+            token_saver=self._save_cloud_tokens,
+        )
         self.cloud_user: dict[str, str] = {}
         self._focus_total_seconds = 25 * 60
         self._focus_seconds = self._focus_total_seconds
@@ -137,7 +142,7 @@ class MainWindow(QMainWindow):
         self._cloud_timer = QTimer(self)
         self._cloud_timer.setInterval(5 * 60 * 1000)
         self._cloud_timer.timeout.connect(self._background_cloud_sync)
-        self._cloud_timer.start()
+        # Cloud sync starts only after a local workspace is unlocked.
         self._build_shell()
         self._apply_theme()
         self._show_auth_gate_if_needed()
@@ -397,6 +402,8 @@ class MainWindow(QMainWindow):
         self._apply_theme()
         self._apply_language()
         self._apply_currency()
+        self._recreate_sync_client_for_workspace()
+        self._cloud_timer.start()
         self.refresh_all()
 
     def _calendar_page(self) -> QWidget:
@@ -876,8 +883,14 @@ class MainWindow(QMainWindow):
         except SyncError as error:
             QMessageBox.warning(self, "Devices", str(error))
             return
+        if isinstance(devices, dict):
+            devices = devices.get("devices", devices.get("items", []))
+        if not isinstance(devices, list):
+            raise SyncError("Invalid devices response from NEXUS API.")
         self.cloud_devices.clear()
         for device in devices:
+            if not isinstance(device, dict):
+                continue
             current = "  ·  THIS DEVICE" if device.get("id") == self.sync_client.device_id else ""
             item = QListWidgetItem(
                 f"{device.get('name', 'NEXUS device')}{current}\n"
@@ -957,15 +970,49 @@ class MainWindow(QMainWindow):
         self._refresh_cloud_devices()
         self._message("Device access revoked.")
 
+    def _cloud_secret_key(self, key: str) -> str:
+        identity = str(self.db.path.expanduser().resolve()).encode("utf-8")
+        suffix = hashlib.sha256(identity).hexdigest()[:16]
+        return f"{key}_{suffix}"
+
+    def _recreate_sync_client_for_workspace(self) -> None:
+        api_url = self.settings.value("cloud_api_url", "http://127.0.0.1:8000")
+        access_key = self._cloud_secret_key("cloud_access_token")
+        refresh_key = self._cloud_secret_key("cloud_refresh_token")
+        access_token = load_secret(self.settings, access_key)
+        refresh_token = load_secret(self.settings, refresh_key)
+
+        # Migrate legacy single-workspace credentials only for the old root DB.
+        if not access_token and self.db.path.name == "nexus.db":
+            legacy_access = load_secret(self.settings, "cloud_access_token")
+            legacy_refresh = load_secret(self.settings, "cloud_refresh_token")
+            if legacy_access or legacy_refresh:
+                access_token, refresh_token = legacy_access, legacy_refresh
+                save_secret(self.settings, access_key, access_token)
+                save_secret(self.settings, refresh_key, refresh_token)
+                clear_secret(self.settings, "cloud_access_token")
+                clear_secret(self.settings, "cloud_refresh_token")
+
+        self.sync_client = SyncClient(
+            self.db,
+            api_url=api_url,
+            token=access_token,
+            refresh_token=refresh_token,
+            token_saver=self._save_cloud_tokens,
+        )
+        self.cloud_user = {}
+
     def _save_cloud_tokens(self, access_token: str, refresh_token: str) -> None:
+        access_key = self._cloud_secret_key("cloud_access_token")
+        refresh_key = self._cloud_secret_key("cloud_refresh_token")
         if access_token:
-            save_secret(self.settings, "cloud_access_token", access_token)
+            save_secret(self.settings, access_key, access_token)
         else:
-            clear_secret(self.settings, "cloud_access_token")
+            clear_secret(self.settings, access_key)
         if refresh_token:
-            save_secret(self.settings, "cloud_refresh_token", refresh_token)
+            save_secret(self.settings, refresh_key, refresh_token)
         else:
-            clear_secret(self.settings, "cloud_refresh_token")
+            clear_secret(self.settings, refresh_key)
 
     def _sync_endpoint(self) -> None:
         endpoint = self.sync_api_url.text().strip().rstrip("/") if hasattr(self, "sync_api_url") else self.sync_client.api_url
@@ -1254,10 +1301,15 @@ class MainWindow(QMainWindow):
         self._message("Cloud account disconnected. Local data remains untouched.")
 
     def _switch_account(self) -> None:
+        if self._cloud_sync_running or (self._cloud_worker and self._cloud_worker.isRunning()):
+            self._message("Finish the current cloud sync before switching accounts.")
+            return
         answer = QMessageBox.question(self, "Switch account", "Return to the account chooser?\n\nYour local NEXUS data will remain on this PC.", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.Yes)
         if answer == QMessageBox.StandardButton.Yes:
-            # Auth screens replace the central widget. Remove workspace shortcuts
-            # first so repeated account switches cannot stack duplicate hotkeys.
+            self._cloud_timer.stop()
+            self.sync_client.token = ""
+            self.sync_client.refresh_token = ""
+            self.cloud_user = {}
             for shortcut in getattr(self, "_shortcuts", []):
                 shortcut.deleteLater()
             self._shortcuts = []
