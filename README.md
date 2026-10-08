@@ -11,7 +11,7 @@ NEXUS is designed around one idea: make progress visible without turning your li
 
 ## Current release
 
-The first version is an early foundation with:
+The current desktop release is a polished local-first personal command center with:
 - Premium dark desktop interface with graphite, lavender, and acid-lime accents
 - Editorial dashboard with quest progress, daily habit check-ins, and focus stats
 - Consistent card-based layouts across the main sections
@@ -26,6 +26,10 @@ The first version is an early foundation with:
 - Local multi-account workspaces with isolated data per account
 - Login/register flow with password hashing and account switching
 - Calendar and personal insights dashboard
+- Local notifications and activity history
+- XP levels, seven-day momentum, and productivity streaks
+- Dashboard quick actions for quests, expenses, journal, and focus
+- Full multi-account local workspaces and portable full backups
 
 ## Stack
 
@@ -90,6 +94,7 @@ The database is stored in your user home directory at `~/.nexus/nexus.db`. Your 
 - [x] Windows executable build pipeline
 - [x] Keyboard shortcuts for navigation and quick actions
 - [x] Calendar and richer analytics
+- [x] Dashboard polish, quick actions, levels, streaks, notifications, and activity history
 - [ ] Accessibility and responsive-layout pass
 - [ ] Desktop ↔ API sync client
 - [ ] Google OAuth and mobile clients
