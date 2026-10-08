@@ -154,7 +154,7 @@ class MainWindow(QMainWindow):
         side.addWidget(local_card)
         side.addStretch(1)
 
-        shortcut_hint = QLabel("CTRL + 1–7    NAVIGATE\nCTRL + N       NEW QUEST\nCTRL + SHIFT + B   BACKUP")
+        shortcut_hint = QLabel("CTRL + 1–9    NAVIGATE\nCTRL + N       NEW QUEST\nCTRL + SHIFT + B   BACKUP")
         shortcut_hint.setObjectName("Muted")
         shortcut_hint.setStyleSheet("font-size: 10px; line-height: 1.5;")
         side.addWidget(shortcut_hint)
@@ -491,12 +491,12 @@ class MainWindow(QMainWindow):
 
     def _apply_language(self) -> None:
         translations = {
-            "English": ["Overview", "Quests", "Habits", "Focus", "Finance", "Journal", "Settings"],
-            "Русский": ["Обзор", "Задачи", "Привычки", "Фокус", "Финансы", "Дневник", "Настройки"],
-            "Română": ["Panou", "Sarcini", "Obiceiuri", "Focus", "Finanțe", "Jurnal", "Setări"],
+            "English": ["Overview", "Quests", "Habits", "Focus", "Finance", "Journal", "Calendar", "Insights", "Settings"],
+            "Русский": ["Обзор", "Задачи", "Привычки", "Фокус", "Финансы", "Дневник", "Календарь", "Статистика", "Настройки"],
+            "Română": ["Panou", "Sarcini", "Obiceiuri", "Focus", "Finanțe", "Jurnal", "Calendar", "Statistici", "Setări"],
         }
         names = translations.get(self.language, translations["English"])
-        symbols = ["⌂", "◇", "✳", "◷", "↗", "▤", "⚙"]
+        symbols = ["⌂", "◇", "✳", "◷", "↗", "▤", "▦", "◒", "⚙"]
         for i in range(len(self.page_names)):
             button = self.nav.button(i)
             if button:
