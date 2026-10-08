@@ -30,6 +30,10 @@ The first version is an early foundation with:
 
 ## Run locally
 
+On Windows, the easiest route is to install Python 3.11 or newer, then double-click `run_nexus.bat`. The script creates a virtual environment, installs dependencies, and launches the app.
+
+Manual route:
+
 1. Install Python 3.11 or newer.
 2. Open a terminal in the repository folder.
 3. Create and activate a virtual environment:
@@ -45,6 +49,10 @@ The first version is an early foundation with:
 5. Launch NEXUS:
 
    `python main.py`
+
+## Build a Windows executable
+
+Double-click `build_windows.bat` or run it from a terminal. The packaged app will be placed in `dist/NEXUS/`. A Windows build can also be triggered from the GitHub Actions workflow.
 
 ## Run tests
 
