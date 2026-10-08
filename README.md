@@ -1,5 +1,10 @@
 # NEXUS
 
+![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)
+![PySide6](https://img.shields.io/badge/UI-PySide6-41CD52?logo=qt&logoColor=white)
+![Storage](https://img.shields.io/badge/storage-SQLite-003B57?logo=sqlite&logoColor=white)
+![License](https://img.shields.io/badge/license-MIT-d8ff78)
+
 **Your personal command center.** A local-first Windows desktop app for goals, habits, focus sessions, money, and notes.
 
 NEXUS is designed around one idea: make progress visible without turning your life into another noisy social network.
@@ -48,6 +53,15 @@ The first version is an early foundation with:
 ## Data and privacy
 
 The database is stored in your user home directory at `~/.nexus/nexus.db`. Your journal and finance entries are not uploaded anywhere by the app.
+
+## Repository structure
+
+- `main.py`: application entry point
+- `nexus/window.py`: desktop UI and user interactions
+- `nexus/database.py`: SQLite persistence and business rules
+- `nexus/backup.py`: consistent database backups and portable JSON export
+- `tests/`: automated database and backup tests
+- `.github/workflows/`: CI tests and Windows build pipeline
 
 ## Roadmap
 
