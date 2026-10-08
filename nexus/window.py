@@ -441,6 +441,9 @@ class MainWindow(QMainWindow):
         self.activity_list = QListWidget()
         self.activity_list.setMinimumHeight(190)
         activity_box.addWidget(self.activity_list)
+        for event in self.db.get_activity(12):
+            stamp = event["created_at"].replace("T", " · ")[:19]
+            self.activity_list.addItem(f'{event["action"]}   ·   {event["detail"]}   ·   {stamp}')
         layout.addWidget(activity_card, 1)
         return page
 
