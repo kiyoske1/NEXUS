@@ -179,7 +179,8 @@ class Database:
         weekly_map = {row["day"]: row["count"] for row in weekly}
         week_done = sum(weekly_map.values())
         return {
-            "open_tasks": open_tasks,\n            "xp": int(xp),
+            "open_tasks": open_tasks,
+            "xp": int(xp),
             "done_today": done_today,
             "focus_today": focus_today,
             "habit_done_today": habit_done_today,
