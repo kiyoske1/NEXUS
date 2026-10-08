@@ -104,3 +104,31 @@ def test_sync_is_last_write_wins():
     assert client.post("/sync/push", headers=headers, json={"records": [older]}).json()["accepted"] == 0
     records = client.get("/sync/pull", headers=headers).json()["records"]
     assert records[0]["payload"]["title"] == "new"
+
+
+def test_logout_only_revokes_current_device_and_logout_all_revokes_everything():
+    first = client.post("/auth/register", json={
+        "name": "Devices", "email": "devices@example.com",
+        "username": "devices", "password": "secret123",
+        "device_id": "device-a", "device_name": "Desktop",
+    }).json()
+    second = client.post("/auth/login", json={
+        "username_or_email": "devices", "password": "secret123",
+        "device_id": "device-b", "device_name": "Phone",
+    }).json()
+
+    first_headers = {"Authorization": f"Bearer {first['access_token']}"}
+    second_headers = {"Authorization": f"Bearer {second['access_token']}"}
+
+    assert client.get("/me", headers=first_headers).status_code == 200
+    assert client.get("/me", headers=second_headers).status_code == 200
+
+    assert client.post("/auth/logout", headers=first_headers).status_code == 200
+    assert client.get("/me", headers=first_headers).status_code == 401
+    assert client.get("/me", headers=second_headers).status_code == 200
+
+    assert client.post("/auth/logout-all", headers=second_headers).status_code == 200
+    assert client.get("/me", headers=second_headers).status_code == 401
+    assert client.post("/auth/refresh", json={
+        "refresh_token": second["refresh_token"], "device_id": "device-b"
+    }).status_code == 401
