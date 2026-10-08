@@ -15,6 +15,8 @@ TABLES = ("tasks", "habits", "habit_logs", "transactions", "journal_entries", "f
 def create_backup(database: Database, destination: str | Path) -> Path:
     """Create a consistent SQLite backup, even while the app is open."""
     target = Path(destination)
+    if target.expanduser().resolve() == database.path.expanduser().resolve():
+        raise ValueError("Backup destination must be different from the live database")
     target.parent.mkdir(parents=True, exist_ok=True)
     with database.connect() as source:
         with sqlite3.connect(target) as backup:
