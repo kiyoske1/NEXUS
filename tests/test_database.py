@@ -216,3 +216,11 @@ def test_create_records_does_not_deadlock(tmp_path):
     assert any(row["id"] == habit_id for row in db.get_habits())
     assert any(row["id"] == transaction_id for row in db.get_transactions())
     assert db.unread_notification_count() >= 2
+
+def test_focus_sessions_can_be_loaded_by_day(db):
+    db.add_focus_session(25)
+    today = date.today().isoformat()
+    sessions = db.get_focus_sessions(today)
+    assert len(sessions) == 1
+    assert sessions[0]["duration_minutes"] == 25
+    assert db.get_focus_sessions("1999-01-01") == []
