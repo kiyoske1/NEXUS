@@ -614,6 +614,9 @@ class MainWindow(QMainWindow):
         profile_row.addWidget(self.profile_username, 2)
         profile_row.addWidget(save_profile)
         profile_box.addLayout(profile_row)
+        password_button = QPushButton("Change password")
+        password_button.clicked.connect(self._change_password)
+        profile_box.addWidget(password_button)
         profile = self.db.get_profile()
         if profile:
             self.profile_name.setText(profile["name"])
@@ -650,6 +653,35 @@ class MainWindow(QMainWindow):
                 shortcut.deleteLater()
             self._shortcuts = []
             self._show_auth_choice()
+
+    def _change_password(self) -> None:
+        profile = self.db.get_profile()
+        if not profile:
+            self._message("No local profile is available.")
+            return
+        current, ok = QInputDialog.getText(self, "Change password", "Current password:", QLineEdit.EchoMode.Password)
+        if not ok:
+            return
+        if not self.db.verify_profile_password(current):
+            self._message("Current password is incorrect.")
+            return
+        new_password, ok = QInputDialog.getText(self, "Change password", "New password (6+ characters):", QLineEdit.EchoMode.Password)
+        if not ok:
+            return
+        if len(new_password) < 6:
+            self._message("New password must be at least 6 characters.")
+            return
+        confirm, ok = QInputDialog.getText(self, "Change password", "Repeat new password:", QLineEdit.EchoMode.Password)
+        if not ok:
+            return
+        if new_password != confirm:
+            self._message("The new passwords do not match.")
+            return
+        try:
+            self.db.save_profile(profile["name"], profile["email"], profile["username"], new_password)
+            self._message("Password changed successfully.")
+        except ValueError as error:
+            self._message(str(error))
 
     def _save_profile(self) -> None:
         try:
