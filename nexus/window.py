@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QFont, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QLabel, QPushButton,
     QStackedWidget, QFrame, QListWidget, QListWidgetItem, QLineEdit,
@@ -96,6 +96,9 @@ class MainWindow(QMainWindow):
             if index == 0:
                 self.nav.button(0).setChecked(True)
         side.addStretch(1)
+        hint = QLabel("CTRL + 1–6  NAVIGATE\nCTRL + N  NEW QUEST\nCTRL + SHIFT + B  BACKUP")
+        hint.setObjectName("Muted")
+        side.addWidget(hint)
         side.addWidget(QLabel("LOCAL-FIRST  •  v0.1.0"))
         outer.addWidget(sidebar)
 
@@ -126,10 +129,24 @@ class MainWindow(QMainWindow):
         content_layout.addWidget(self.pages, 1)
         outer.addWidget(content, 1)
         self.setCentralWidget(root)
+        self._shortcuts = []
+        for index in range(len(self.page_names)):
+            shortcut = QShortcut(QKeySequence(f"Ctrl+{index + 1}"), self)
+            shortcut.activated.connect(lambda i=index: self._navigate(i))
+            self._shortcuts.append(shortcut)
+        new_quest_shortcut = QShortcut(QKeySequence("Ctrl+N"), self)
+        new_quest_shortcut.activated.connect(self._add_task)
+        self._shortcuts.append(new_quest_shortcut)
+        backup_shortcut = QShortcut(QKeySequence("Ctrl+Shift+B"), self)
+        backup_shortcut.activated.connect(self._backup_database)
+        self._shortcuts.append(backup_shortcut)
 
     def _navigate(self, index: int) -> None:
         self.pages.setCurrentIndex(index)
         self.page_title.setText(self.page_names[index])
+        button = self.nav.button(index)
+        if button and not button.isChecked():
+            button.setChecked(True)
         self.refresh_all()
 
     def _overview_page(self) -> QWidget:
