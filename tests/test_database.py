@@ -1,3 +1,4 @@
+import sqlite3
 from datetime import date
 
 import pytest
@@ -108,3 +109,32 @@ def test_profile_is_saved_and_password_is_verified(db):
     assert db.get_profile()["username"] == "vova"
     assert db.verify_profile_password("secret") is True
     assert db.verify_profile_password("wrong") is False
+
+
+def test_legacy_profile_schema_is_migrated(tmp_path):
+    path = tmp_path / "legacy-nexus.db"
+    with sqlite3.connect(path) as connection:
+        connection.execute(
+            """
+            CREATE TABLE profile (
+                id INTEGER PRIMARY KEY CHECK(id = 1),
+                name TEXT NOT NULL DEFAULT '',
+                email TEXT NOT NULL DEFAULT '',
+                username TEXT NOT NULL DEFAULT ''
+            )
+            """
+        )
+        connection.execute(
+            "INSERT INTO profile(id, name, email, username) VALUES (1, 'Vova', 'vova@example.com', 'vova')"
+        )
+        connection.commit()
+
+    migrated = Database(path)
+    profile = migrated.get_profile()
+
+    assert profile["username"] == "vova"
+    assert profile["password_hash"] == ""
+    assert profile["created_at"] == ""
+
+    migrated.save_profile("Vova", "vova@example.com", "vova", "secret")
+    assert migrated.verify_profile_password("secret") is True
