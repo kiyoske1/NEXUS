@@ -17,6 +17,7 @@ from nexus.database import Database
 from nexus.backup import create_backup, create_full_backup, export_json
 from nexus.charts import WeeklyActivityChart
 from nexus.sync import SyncClient, SyncError
+from nexus.secure_storage import load_secret, save_secret, clear_secret
 
 
 STYLES = """
@@ -90,7 +91,7 @@ class MainWindow(QMainWindow):
         self.currency = self.settings.value("currency", "RUB")
         self.language = self.settings.value("language", "English")
         self.theme = self.settings.value("theme", "NEXUS Lime")
-        self.sync_client = SyncClient(self.db, api_url=self.settings.value("cloud_api_url", "http://127.0.0.1:8000"), token=self.settings.value("cloud_token", ""))
+        self.sync_client = SyncClient(self.db, api_url=self.settings.value("cloud_api_url", "http://127.0.0.1:8000"), token=load_secret(self.settings, "cloud_access_token"), refresh_token=load_secret(self.settings, "cloud_refresh_token"), token_saver=self._save_cloud_tokens)
         self._focus_total_seconds = 25 * 60
         self._focus_seconds = self._focus_total_seconds
         self._focus_running = False
@@ -744,6 +745,16 @@ class MainWindow(QMainWindow):
         return page
 
 
+    def _save_cloud_tokens(self, access_token: str, refresh_token: str) -> None:
+        if access_token:
+            save_secret(self.settings, "cloud_access_token", access_token)
+        else:
+            clear_secret(self.settings, "cloud_access_token")
+        if refresh_token:
+            save_secret(self.settings, "cloud_refresh_token", refresh_token)
+        else:
+            clear_secret(self.settings, "cloud_refresh_token")
+
     def _sync_endpoint(self) -> None:
         endpoint = self.sync_api_url.text().strip().rstrip("/") if hasattr(self, "sync_api_url") else self.sync_client.api_url
         if endpoint:
@@ -772,7 +783,7 @@ class MainWindow(QMainWindow):
             return
         try:
             user = self.sync_client.login(identifier.strip(), password)
-            self.settings.setValue("cloud_token", self.sync_client.token)
+            self._save_cloud_tokens(self.sync_client.token, self.sync_client.refresh_token)
             self._refresh_sync_status()
             self._message(f"Cloud connected as @{user['username']}.")
         except SyncError as error:
@@ -815,7 +826,8 @@ class MainWindow(QMainWindow):
 
     def _disconnect_cloud(self) -> None:
         self.sync_client.logout()
-        self.settings.remove("cloud_token")
+        clear_secret(self.settings, "cloud_access_token")
+        clear_secret(self.settings, "cloud_refresh_token")
         self._refresh_sync_status()
         self._message("Cloud account disconnected. Local data remains untouched.")
 
