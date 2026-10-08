@@ -155,3 +155,15 @@ def test_multiple_accounts_have_isolated_workspaces(tmp_path):
 
     assert db.authenticate_account("bob", "secret2") is True
     assert db.get_tasks() == []
+
+
+def test_profile_edit_cannot_take_another_account_identity(tmp_path):
+    db = Database(tmp_path / "profiles.db")
+    db.create_account("Alice", "alice@example.com", "alice", "secret1")
+    db.create_account("Bob", "bob@example.com", "bob", "secret2")
+    assert db.authenticate_account("alice", "secret1") is True
+
+    with pytest.raises(ValueError):
+        db.save_profile("Alice", "bob@example.com", "alice", "")
+
+    assert db.get_profile()["email"] == "alice@example.com"
