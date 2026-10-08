@@ -1209,6 +1209,10 @@ class MainWindow(QMainWindow):
         self.habits_copy.setText(f'{stats["habits_done"]} / {stats["habits_total"]} {self._tr("habits complete")}')
         self.overview_habits.setText(self._tr("You're building consistency.") if stats["habits_total"] else self._tr("Add one small habit to begin."))
         self.focus_minutes_copy.setText(f'{stats["focus_minutes"]} min')
+        self._refresh_dashboard_summary()
+        if hasattr(self, "notification_button"):
+            unread = self.db.unread_notification_count()
+            self.notification_button.setText(f"◉  {unread}")
         self.activity_chart.set_data(self.db.weekly_activity())
         pending = self.db.get_tasks(include_done=False)
         self.overview_tasks.clear()
