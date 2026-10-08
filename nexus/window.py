@@ -775,6 +775,17 @@ class MainWindow(QMainWindow):
         resolve_conflicts.clicked.connect(self._show_sync_conflicts)
         sync_box.addWidget(resolve_conflicts)
 
+        history_label = QLabel("SYNC HISTORY")
+        history_label.setObjectName("Tiny")
+        sync_box.addWidget(history_label)
+        self.sync_history = QListWidget()
+        self.sync_history.setMaximumHeight(180)
+        self.sync_history.setSelectionMode(QListWidget.SelectionMode.NoSelection)
+        sync_box.addWidget(self.sync_history)
+        history_refresh = QPushButton("↻  Refresh history")
+        history_refresh.clicked.connect(self._refresh_sync_history)
+        sync_box.addWidget(history_refresh)
+
         devices_label = QLabel("DEVICES")
         devices_label.setObjectName("Tiny")
         sync_box.addWidget(devices_label)
@@ -986,6 +997,35 @@ class MainWindow(QMainWindow):
             self._message(f"Cloud account created for @{user['username']}.")
         except SyncError as error:
             self._message(str(error))
+
+    def _refresh_sync_history(self) -> None:
+        if not hasattr(self, "sync_history"):
+            return
+        self.sync_history.clear()
+        if not self.sync_client.token:
+            self.sync_history.addItem("Connect a cloud account to see sync history.")
+            return
+        try:
+            history = self.sync_client.list_history(20)
+        except Exception:
+            self.sync_history.addItem("Sync history unavailable.")
+            return
+        if not history:
+            self.sync_history.addItem("No sync runs yet.")
+            return
+        for run in history:
+            status = run.get("status", "unknown").upper()
+            stamp = run.get("finished_at") or run.get("started_at", "")
+            pushed = int(run.get("pushed", 0))
+            pulled = int(run.get("pulled", 0))
+            conflicts = int(run.get("conflicts", 0))
+            detail = f"↑ {pushed}  ·  ↓ {pulled}"
+            if conflicts:
+                detail += f"  ·  ⚠ {conflicts} conflicts"
+            if run.get("error"):
+                detail += f"  ·  {run['error']}"
+            item = QListWidgetItem(f"{status}  ·  {stamp}\n{detail}")
+            self.sync_history.addItem(item)
 
     def _refresh_sync_conflicts(self) -> None:
         if not hasattr(self, "sync_conflicts_label"):
