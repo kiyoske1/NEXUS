@@ -246,6 +246,16 @@ def revoke_device(device_id: str, user=Depends(current_user)):
     return {"ok": True}
 
 
+@app.post("/auth/logout-all")
+def logout_all(user=Depends(current_user)):
+    conn = db()
+    conn.execute("DELETE FROM sessions WHERE user_id=?", (user["id"],))
+    conn.execute("DELETE FROM refresh_tokens WHERE user_id=?", (user["id"],))
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
 @app.post("/auth/logout")
 def logout(credentials: HTTPAuthorizationCredentials = Depends(bearer)):
     if credentials:
