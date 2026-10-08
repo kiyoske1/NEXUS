@@ -764,6 +764,16 @@ class MainWindow(QMainWindow):
         sync_row.addWidget(cloud_disconnect)
         sync_box.addLayout(sync_row)
 
+        conflicts_label = QLabel("CONFLICTS")
+        conflicts_label.setObjectName("Tiny")
+        sync_box.addWidget(conflicts_label)
+        self.sync_conflicts_label = QLabel("No unresolved conflicts")
+        self.sync_conflicts_label.setObjectName("Muted")
+        sync_box.addWidget(self.sync_conflicts_label)
+        resolve_conflicts = QPushButton("⚡  Review conflicts")
+        resolve_conflicts.clicked.connect(self._show_sync_conflicts)
+        sync_box.addWidget(resolve_conflicts)
+
         devices_label = QLabel("DEVICES")
         devices_label.setObjectName("Tiny")
         sync_box.addWidget(devices_label)
@@ -933,6 +943,73 @@ class MainWindow(QMainWindow):
         except SyncError as error:
             self._message(str(error))
 
+    def _refresh_sync_conflicts(self) -> None:
+        if not hasattr(self, "sync_conflicts_label"):
+            return
+        try:
+            count = len(self.sync_client.list_conflicts())
+            self.sync_conflicts_label.setText(
+                f"⚠  {count} conflict{'s' if count != 1 else ''} need review"
+                if count else "No unresolved conflicts"
+            )
+        except Exception:
+            self.sync_conflicts_label.setText("Conflict status unavailable")
+
+    def _show_sync_conflicts(self) -> None:
+        conflicts = self.sync_client.list_conflicts()
+        if not conflicts:
+            QMessageBox.information(self, "Sync Center", "No unresolved conflicts. Your cloud data is in sync.")
+            return
+        conflict = conflicts[0]
+        dialog = QDialog(self)
+        dialog.setWindowTitle("NEXUS · Resolve conflict")
+        dialog.resize(760, 520)
+        layout = QVBoxLayout(dialog)
+        layout.addWidget(heading(f"Conflict · {conflict['entity']}", "Section"))
+        layout.addWidget(QLabel("The same record was changed locally and in the cloud. Choose which version survives."))
+
+        def preview(title: str, payload: dict) -> QTextEdit:
+            box = QTextEdit()
+            box.setReadOnly(True)
+            box.setPlainText(json.dumps(payload, ensure_ascii=False, indent=2, default=str))
+            box.setPlaceholderText(title)
+            return box
+
+        columns = QHBoxLayout()
+        left = QVBoxLayout()
+        left.addWidget(QLabel("LOCAL VERSION"))
+        left.addWidget(preview("Local", conflict["local_payload"]))
+        right = QVBoxLayout()
+        right.addWidget(QLabel("CLOUD VERSION"))
+        right.addWidget(preview("Cloud", conflict["remote_payload"]))
+        columns.addLayout(left, 1)
+        columns.addLayout(right, 1)
+        layout.addLayout(columns)
+
+        buttons = QHBoxLayout()
+        local = QPushButton("Keep local")
+        remote = QPushButton("Use cloud")
+        local.setObjectName("Primary")
+        remote.setObjectName("Primary")
+        buttons.addWidget(local)
+        buttons.addWidget(remote)
+        buttons.addStretch(1)
+        layout.addLayout(buttons)
+
+        def resolve(choice: str) -> None:
+            try:
+                self.sync_client.resolve_conflict(conflict["id"], choice)
+                dialog.accept()
+                self._refresh_sync_conflicts()
+                self.refresh_all()
+                self._message(f"Conflict resolved: {'local' if choice == 'local' else 'cloud'} version kept.")
+            except SyncError as error:
+                QMessageBox.warning(dialog, "Conflict", str(error))
+
+        local.clicked.connect(lambda: resolve("local"))
+        remote.clicked.connect(lambda: resolve("remote"))
+        dialog.exec()
+
     def _set_sync_center_state(self, state: str, result: dict | None = None) -> None:
         if not hasattr(self, "sync_progress"):
             return
@@ -960,6 +1037,7 @@ class MainWindow(QMainWindow):
         self.last_sync_label.setText(
             f"Last sync: {self.sync_client.last_sync_at or 'never'}"
         )
+        self._refresh_sync_conflicts()
 
     def _background_cloud_sync(self) -> None:
         if (
