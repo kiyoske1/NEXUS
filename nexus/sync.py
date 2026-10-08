@@ -113,9 +113,17 @@ class SyncClient:
                 for row in rows:
                     payload = dict(row)
                     local_id = int(payload["id"])
-                    client_id = f"{self.device_id}:{table}:{local_id}"
+                    mapped = db.execute(
+                        "SELECT client_id FROM sync_meta WHERE entity=? AND local_id=?",
+                        (table, local_id),
+                    ).fetchone()
+                    client_id = mapped["client_id"] if mapped else f"{self.device_id}:{table}:{local_id}"
                     if table == "habit_logs":
-                        payload["habit_client_id"] = self._habit_client_id(db, int(payload["habit_id"]))
+                        habit_map = db.execute(
+                            "SELECT client_id FROM sync_meta WHERE entity='habits' AND local_id=?",
+                            (int(payload["habit_id"]),),
+                        ).fetchone()
+                        payload["habit_client_id"] = habit_map["client_id"] if habit_map else self._habit_client_id(db, int(payload["habit_id"]))
                     records.append({"entity": table, "client_id": client_id, "payload": payload, "local_id": local_id})
         return records
 
