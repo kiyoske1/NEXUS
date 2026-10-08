@@ -865,6 +865,12 @@ class MainWindow(QMainWindow):
         qhead.addStretch(1)
         qhead.addWidget(heading("OPEN QUESTS", "Tiny"))
         ql.addLayout(qhead)
+        quick = QHBoxLayout()
+        for title, handler in [("＋ Quest", self._add_task), ("＋ Expense", self._add_transaction), ("✎ Journal", lambda: self._navigate(5)), ("▶ Focus", lambda: self._navigate(3))]:
+            button = QPushButton(title)
+            button.clicked.connect(handler)
+            quick.addWidget(button)
+        ql.addLayout(quick)
         self.overview_tasks = QListWidget()
         self.overview_tasks.setMinimumHeight(145)
         self.overview_tasks.setMaximumHeight(180)
