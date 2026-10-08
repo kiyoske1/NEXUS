@@ -21,7 +21,6 @@ CREATE TABLE IF NOT EXISTS sessions(
     user_id INTEGER NOT NULL,
     device_id TEXT,
     expires_at TEXT NOT NULL,
-    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS devices(
