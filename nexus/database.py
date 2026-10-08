@@ -483,6 +483,17 @@ class Database:
             ).fetchall()
             return [dict(row) for row in rows]
 
+    def delete_transaction(self, transaction_id: int) -> None:
+        with self.connect() as db:
+            row = db.execute(
+                "SELECT title FROM transactions WHERE id = ?",
+                (int(transaction_id),),
+            ).fetchone()
+            if not row:
+                return
+            db.execute("DELETE FROM transactions WHERE id = ?", (int(transaction_id),))
+        self.log_activity("Finance entry deleted", row["title"])
+
     def add_journal_entry(self, title: str, body: str) -> int:
         title, body = title.strip(), body.strip()
         if not title and not body:
