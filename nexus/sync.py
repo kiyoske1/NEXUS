@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 
+API_PREFIX = "/api/v1"
 TABLES = ("tasks", "habits", "habit_logs", "transactions", "journal_entries", "focus_sessions")
 SYNC_META = """
 CREATE TABLE IF NOT EXISTS sync_meta (
@@ -94,7 +95,7 @@ class SyncClient:
             headers["Authorization"] = f"Bearer {self.token}"
         if payload is not None:
             body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-        request = urllib.request.Request(f"{self.api_url}{path}", data=body, headers=headers, method=method)
+        request = urllib.request.Request(f"{self.api_url}{API_PREFIX}{path}", data=body, headers=headers, method=method)
         try:
             with urllib.request.urlopen(request, timeout=15) as response:
                 return json.loads(response.read().decode("utf-8"))
@@ -122,7 +123,7 @@ class SyncClient:
     def _request_raw_refresh(self) -> dict[str, Any]:
         body = json.dumps({"refresh_token": self.refresh_token, "device_id": self.device_id}).encode("utf-8")
         request = urllib.request.Request(
-            f"{self.api_url}/auth/refresh", data=body,
+            f"{self.api_url}{API_PREFIX}/auth/refresh", data=body,
             headers={"Accept": "application/json", "Content-Type": "application/json"},
             method="POST",
         )
