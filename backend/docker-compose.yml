@@ -36,6 +36,7 @@ services:
       - api
     environment:
       NEXUS_DOMAIN: ${NEXUS_DOMAIN:?set-your-api-domain}
+      TLS_EMAIL: ${TLS_EMAIL:?set-your-email}
     ports:
       - "80:80"
       - "443:443"
