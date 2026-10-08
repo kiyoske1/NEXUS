@@ -59,7 +59,8 @@ class MainWindow(QMainWindow):
         self.resize(1180, 780)
         self.setMinimumSize(940, 640)
         self.setStyleSheet(STYLES)
-        self._focus_seconds = 25 * 60
+        self._focus_total_seconds = 25 * 60
+        self._focus_seconds = self._focus_total_seconds
         self._focus_running = False
         self._timer = QTimer(self)
         self._timer.setInterval(1000)
@@ -138,7 +139,7 @@ class MainWindow(QMainWindow):
         intro = panel()
         intro_layout = QVBoxLayout(intro)
         intro_layout.setContentsMargins(22, 20, 22, 20)
-        intro_layout.addWidget(QLabel("THURSDAY / PERSONAL SYSTEM"))
+        intro_layout.addWidget(QLabel("YOUR PERSONAL SYSTEM"))
         intro_layout.addWidget(heading("Make today count.", "Hero"))
         intro_layout.addWidget(QLabel("Small actions. Compounding progress. Your life, on your terms."))
         layout.addWidget(intro)
@@ -262,12 +263,23 @@ class MainWindow(QMainWindow):
         card_layout.setSpacing(16)
         card_layout.addWidget(heading("Protect your attention.", "Hero"))
         card_layout.addWidget(QLabel("One task. One window. Everything else can wait."))
+        preset_row = QHBoxLayout()
+        preset_row.addWidget(QLabel("Session length"))
+        self.focus_preset = QComboBox()
+        self.focus_preset.addItem("15 minutes", 15)
+        self.focus_preset.addItem("25 minutes", 25)
+        self.focus_preset.addItem("45 minutes", 45)
+        self.focus_preset.addItem("60 minutes", 60)
+        self.focus_preset.setCurrentIndex(1)
+        self.focus_preset.currentIndexChanged.connect(self._set_focus_preset)
+        preset_row.addWidget(self.focus_preset)
+        card_layout.addLayout(preset_row)
         self.focus_time = heading("25:00", "Metric")
         self.focus_time.setAlignment(Qt.AlignmentFlag.AlignCenter)
         card_layout.addWidget(self.focus_time)
         self.focus_progress = QProgressBar()
-        self.focus_progress.setRange(0, 1500)
-        self.focus_progress.setValue(1500)
+        self.focus_progress.setRange(0, self._focus_total_seconds)
+        self.focus_progress.setValue(self._focus_total_seconds)
         card_layout.addWidget(self.focus_progress)
         buttons = QHBoxLayout()
         start = QPushButton("Start / Pause")
@@ -327,6 +339,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(save)
         layout.addWidget(heading("Recent entries"))
         self.journal_list = QListWidget()
+        self.journal_list.itemDoubleClicked.connect(self._open_journal_entry)
         layout.addWidget(self.journal_list, 2)
         return page
 
@@ -366,7 +379,7 @@ class MainWindow(QMainWindow):
         if hasattr(self, "journal_list"):
             self.journal_list.clear()
             for entry in self.db.get_journal_entries():
-                self.journal_list.addItem(f'{entry["title"]}   ·   {entry["created_at"][:16].replace("T", " ")}')
+                self.journal_list.addItem(f'{entry["title"]}   ·   {entry["created_at"][:16].replace("T", " ")}   ·   #{entry["id"]}')
 
     def _selected_id(self, widget: QListWidget) -> int | None:
         item = widget.currentItem()
@@ -452,17 +465,29 @@ class MainWindow(QMainWindow):
         if self._focus_seconds <= 0:
             self._timer.stop()
             self._focus_running = False
-            self.db.add_focus_session(25)
+            self.db.add_focus_session(max(1, self._focus_total_seconds // 60))
             self.focus_status.setText("Session complete. Nice work.")
             QMessageBox.information(self, "NEXUS Focus", "25 minutes complete. Take a short break.")
             self.refresh_all()
 
+    def _set_focus_preset(self) -> None:
+        if self._focus_running:
+            self._timer.stop()
+            self._focus_running = False
+        minutes = int(self.focus_preset.currentData())
+        self._focus_total_seconds = minutes * 60
+        self._focus_seconds = self._focus_total_seconds
+        self.focus_time.setText(f"{minutes:02d}:00")
+        self.focus_progress.setRange(0, self._focus_total_seconds)
+        self.focus_progress.setValue(self._focus_total_seconds)
+        self.focus_status.setText(f"{minutes}-minute session ready.")
+
     def _reset_focus(self) -> None:
         self._timer.stop()
         self._focus_running = False
-        self._focus_seconds = 25 * 60
-        self.focus_time.setText("25:00")
-        self.focus_progress.setValue(1500)
+        self._focus_seconds = self._focus_total_seconds
+        self.focus_time.setText(f"{self._focus_seconds // 60:02d}:{self._focus_seconds % 60:02d}")
+        self.focus_progress.setValue(self._focus_total_seconds)
         self.focus_status.setText("Timer reset.")
 
     def _add_transaction(self) -> None:
@@ -483,6 +508,14 @@ class MainWindow(QMainWindow):
         self.journal_title.clear()
         self.journal_body.clear()
         self.refresh_all()
+
+    def _open_journal_entry(self, item) -> None:
+        entry_id = self._selected_id(self.journal_list)
+        if entry_id is None:
+            return
+        entry = next((row for row in self.db.get_journal_entries() if row["id"] == entry_id), None)
+        if entry:
+            QMessageBox.information(self, entry["title"], entry["body"] or "(Empty entry)")
 
     def _backup_database(self) -> None:
         path, _ = QFileDialog.getSaveFileName(
