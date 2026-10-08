@@ -140,7 +140,7 @@ class SyncClient:
         result = self._request("POST", "/auth/login", {
             "username_or_email": username_or_email, "password": password, "device_id": self.device_id, "device_name": "NEXUS desktop",
         })
-        self.token = result["access_token"]
+        self._set_tokens(result)
         return result["user"]
 
     def logout(self) -> None:
