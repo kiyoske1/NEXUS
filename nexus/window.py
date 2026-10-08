@@ -1178,12 +1178,19 @@ class MainWindow(QMainWindow):
             return
         self._cloud_sync_running = True
         self._set_sync_center_state("syncing")
-        self._cloud_worker = CloudSyncWorker(self.sync_client)
+        self._cloud_worker = CloudSyncWorker(self.db, self.sync_client.api_url, self.sync_client.token, self.sync_client.refresh_token, self.sync_client.device_id)
         self._cloud_worker.finished.connect(self._on_background_sync_finished)
+        self._cloud_worker.tokens_refreshed.connect(self._on_cloud_tokens_refreshed)
         self._cloud_worker.failed.connect(self._on_background_sync_failed)
         self._cloud_worker.finished.connect(self._cleanup_cloud_worker)
         self._cloud_worker.failed.connect(self._cleanup_cloud_worker)
         self._cloud_worker.start()
+
+    def _on_cloud_tokens_refreshed(self, access_token: str, refresh_token: str) -> None:
+        self.sync_client.token = access_token
+        self.sync_client.refresh_token = refresh_token
+        save_secret(self.settings, "cloud_access_token", access_token)
+        save_secret(self.settings, "cloud_refresh_token", refresh_token)
 
     def _on_background_sync_finished(self, result: dict) -> None:
         self._cloud_sync_running = False
@@ -1214,8 +1221,9 @@ class MainWindow(QMainWindow):
             return
         self._cloud_sync_running = True
         self._set_sync_center_state("syncing")
-        self._cloud_worker = CloudSyncWorker(self.sync_client)
+        self._cloud_worker = CloudSyncWorker(self.db, self.sync_client.api_url, self.sync_client.token, self.sync_client.refresh_token, self.sync_client.device_id)
         self._cloud_worker.finished.connect(self._on_manual_sync_finished)
+        self._cloud_worker.tokens_refreshed.connect(self._on_cloud_tokens_refreshed)
         self._cloud_worker.failed.connect(self._on_manual_sync_failed)
         self._cloud_worker.finished.connect(self._cleanup_cloud_worker)
         self._cloud_worker.failed.connect(self._cleanup_cloud_worker)
