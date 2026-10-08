@@ -19,6 +19,7 @@ from typing import Any
 
 
 API_PREFIX = "/api/v1"
+API_PREFIX = "/api/v1"
 TABLES = ("tasks", "habits", "habit_logs", "transactions", "journal_entries", "focus_sessions")
 SYNC_META = """
 CREATE TABLE IF NOT EXISTS sync_meta (
