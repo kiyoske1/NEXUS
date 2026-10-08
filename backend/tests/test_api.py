@@ -18,10 +18,27 @@ def teardown_module():
         pass
 
 
+def test_api_v1_contract_and_legacy_compatibility():
+    response = client.get("/api/v1")
+    assert response.status_code == 200
+    assert response.json()["version"] == "1.0.0"
+
+    docs = client.get("/api/v1/openapi.json")
+    assert docs.status_code == 200
+    assert docs.json()["info"]["version"] == "1.0.0"
+    assert "/api/v1/auth/login" in docs.json()["paths"]
+
+    legacy = client.get("/health")
+    assert legacy.status_code == 200
+    assert legacy.headers["X-NEXUS-API-Version"] == "1.0.0"
+    assert legacy.headers["Deprecation"] == "true"
+
+
 def test_health():
-    response = client.get("/health")
+    response = client.get("/api/v1/health")
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
+    assert response.json()["version"] == "1.0.0"
 
 
 def test_auth_and_sync_flow():
