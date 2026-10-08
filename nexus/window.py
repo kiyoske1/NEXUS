@@ -82,14 +82,30 @@ def heading(text: str, object_name: str = "Section") -> QLabel:
 class CloudSyncWorker(QThread):
     finished = Signal(dict)
     failed = Signal(str)
+    tokens_refreshed = Signal(str, str)
 
-    def __init__(self, sync_client: SyncClient) -> None:
+    def __init__(self, database, api_url: str, token: str, refresh_token: str, device_id: str) -> None:
         super().__init__()
-        self.sync_client = sync_client
+        self.database = database
+        self.api_url = api_url
+        self.token = token
+        self.refresh_token = refresh_token
+        self.device_id = device_id
+
+    def _save_tokens(self, access_token: str, refresh_token: str) -> None:
+        self.tokens_refreshed.emit(access_token, refresh_token)
 
     def run(self) -> None:
+        client = SyncClient(
+            self.database,
+            api_url=self.api_url,
+            token=self.token,
+            refresh_token=self.refresh_token,
+            token_saver=self._save_tokens,
+        )
+        client.device_id = self.device_id
         try:
-            result = self.sync_client.sync()
+            result = client.sync()
             self.finished.emit(result)
         except Exception as error:
             self.failed.emit(str(error))
