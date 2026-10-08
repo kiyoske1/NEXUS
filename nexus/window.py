@@ -174,7 +174,7 @@ class MainWindow(QMainWindow):
         bottom.addWidget(quest_card, 3)
         progress_card = panel()
         pl = QVBoxLayout(progress_card)
-        pl.addWidget(heading("Daily rhythm"))
+        pl.addWidget(heading("Quest progress"))
         self.daily_progress = QProgressBar()
         self.daily_progress.setRange(0, 100)
         pl.addWidget(self.daily_progress)
@@ -360,7 +360,7 @@ class MainWindow(QMainWindow):
         total = stats["tasks_total"]
         pct = round(stats["tasks_done"] / total * 100) if total else 0
         self.daily_progress.setValue(pct)
-        self.progress_copy.setText(f'{stats["tasks_done"]} of {total} quests completed · {stats["focus_minutes"]} focus minutes logged')
+        self.progress_copy.setText(f'{stats["tasks_done"]} of {total} quests completed overall · {stats["focus_minutes"]} focus minutes logged')
         if hasattr(self, "task_list"):
             self.task_list.clear()
             for task in self.db.get_tasks():
