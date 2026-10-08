@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
     QStackedWidget, QFrame, QListWidget, QListWidgetItem, QLineEdit,
     QComboBox, QSpinBox, QDoubleSpinBox, QTextEdit, QInputDialog, QFileDialog,
     QMessageBox, QProgressBar, QButtonGroup, QRadioButton, QScrollArea,
-    QGridLayout, QCalendarWidget,
+    QGridLayout, QCalendarWidget, QDialog,
 )
 
 from nexus.database import Database
@@ -193,9 +193,16 @@ class MainWindow(QMainWindow):
         backup_button = QPushButton("↧  Backup")
         backup_button.setToolTip("Create a local copy of your database")
         backup_button.clicked.connect(self._backup_database)
+        self.notification_button = QPushButton("◉  0")
+        self.notification_button.setToolTip("Open notification center")
+        self.notification_button.clicked.connect(self._show_notifications)
+        backup_button = QPushButton("↧  Backup")
+        backup_button.setToolTip("Create a local copy of your database")
+        backup_button.clicked.connect(self._backup_database)
         export_button = QPushButton("⇧  Export")
         export_button.setToolTip("Export all NEXUS data to JSON")
         export_button.clicked.connect(self._export_json)
+        top.addWidget(self.notification_button)
         top.addWidget(backup_button)
         top.addWidget(export_button)
         content_layout.addLayout(top)
@@ -422,8 +429,54 @@ class MainWindow(QMainWindow):
             self.insight_labels[key] = value
             grid.addWidget(card, idx // 3, idx % 3)
         layout.addLayout(grid)
-        layout.addStretch(1)
+        activity_card = panel()
+        activity_box = QVBoxLayout(activity_card)
+        activity_box.setContentsMargins(18, 16, 18, 16)
+        activity_header = QHBoxLayout()
+        activity_header.addWidget(heading("Activity history", "Section"))
+        activity_header.addStretch(1)
+        clear_hint = heading("LATEST 12 EVENTS", "Tiny")
+        activity_header.addWidget(clear_hint)
+        activity_box.addLayout(activity_header)
+        self.activity_list = QListWidget()
+        self.activity_list.setMinimumHeight(190)
+        activity_box.addWidget(self.activity_list)
+        layout.addWidget(activity_card, 1)
         return page
+
+    def _show_notifications(self) -> None:
+        dialog = QDialog(self)
+        dialog.setWindowTitle("NEXUS · Notifications")
+        dialog.setMinimumSize(520, 520)
+        box = QVBoxLayout(dialog)
+        box.setContentsMargins(22, 20, 22, 20)
+        header = QHBoxLayout()
+        header.addWidget(heading("Notification center", "Hero"))
+        header.addStretch(1)
+        read_all = QPushButton("Mark all read")
+        read_all.clicked.connect(lambda: (self.db.mark_all_notifications_read(), dialog.accept(), self.refresh_all()))
+        header.addWidget(read_all)
+        box.addLayout(header)
+        notifications = self.db.get_notifications(limit=60)
+        if not notifications:
+            box.addWidget(QLabel("Everything is quiet. Your next signal will appear here."))
+        else:
+            for item in notifications:
+                row = QFrame()
+                row.setObjectName("Panel")
+                rb = QVBoxLayout(row)
+                rb.setContentsMargins(12, 10, 12, 10)
+                title = QLabel(("● " if not item["read"] else "○ ") + item["title"])
+                title.setStyleSheet("font-weight: 800;")
+                rb.addWidget(title)
+                if item["body"]:
+                    rb.addWidget(QLabel(item["body"]))
+                rb.addWidget(QLabel(item["created_at"].replace("T", "  ·  ")))
+                box.addWidget(row)
+                if not item["read"]:
+                    self.db.mark_notification_read(item["id"])
+        dialog.exec()
+        self.refresh_all()
 
     def _currency_prefix(self) -> str:
         return {"RUB": "₽ ", "PMR": "р. ", "USD": "$ ", "EUR": "€ ", "USDT": "₮ "}.get(self.currency, "₽ ")
