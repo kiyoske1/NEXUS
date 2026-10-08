@@ -90,7 +90,7 @@ class MainWindow(QMainWindow):
         self.currency = self.settings.value("currency", "RUB")
         self.language = self.settings.value("language", "English")
         self.theme = self.settings.value("theme", "NEXUS Lime")
-        self.sync_client = SyncClient(self.db, token=self.settings.value("cloud_token", ""))
+        self.sync_client = SyncClient(self.db, api_url=self.settings.value("cloud_api_url", "http://127.0.0.1:8000"), token=self.settings.value("cloud_token", ""))
         self._focus_total_seconds = 25 * 60
         self._focus_seconds = self._focus_total_seconds
         self._focus_running = False
@@ -697,6 +697,12 @@ class MainWindow(QMainWindow):
         sync_box.setSpacing(10)
         sync_box.addWidget(heading("Cloud sync", "Section"))
         sync_box.addWidget(QLabel("Optional encrypted-in-transit sync between this desktop and your NEXUS API account."))
+        api_row = QHBoxLayout()
+        api_row.addWidget(QLabel("API endpoint"))
+        self.sync_api_url = QLineEdit(self.sync_client.api_url)
+        self.sync_api_url.setPlaceholderText("https://api.example.com")
+        api_row.addWidget(self.sync_api_url, 1)
+        sync_box.addLayout(api_row)
         self.sync_status = QLabel()
         self.sync_status.setObjectName("Muted")
         sync_box.addWidget(self.sync_status)
@@ -738,6 +744,12 @@ class MainWindow(QMainWindow):
         return page
 
 
+    def _sync_endpoint(self) -> None:
+        endpoint = self.sync_api_url.text().strip().rstrip("/") if hasattr(self, "sync_api_url") else self.sync_client.api_url
+        if endpoint:
+            self.sync_client.api_url = endpoint
+            self.settings.setValue("cloud_api_url", endpoint)
+
     def _refresh_sync_status(self) -> None:
         if not hasattr(self, "sync_status"):
             return
@@ -751,6 +763,7 @@ class MainWindow(QMainWindow):
         self.sync_status.style().polish(self.sync_status)
 
     def _connect_cloud(self) -> None:
+        self._sync_endpoint()
         identifier, ok = QInputDialog.getText(self, "Connect cloud account", "Username or email:")
         if not ok or not identifier.strip():
             return
@@ -766,6 +779,7 @@ class MainWindow(QMainWindow):
             self._message(str(error))
 
     def _register_cloud(self) -> None:
+        self._sync_endpoint()
         name, ok = QInputDialog.getText(self, "Create cloud account", "Name:")
         if not ok or not name.strip():
             return
@@ -787,6 +801,7 @@ class MainWindow(QMainWindow):
             self._message(str(error))
 
     def _cloud_sync(self) -> None:
+        self._sync_endpoint()
         if not self.sync_client.token:
             self._connect_cloud()
             if not self.sync_client.token:
