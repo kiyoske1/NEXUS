@@ -92,6 +92,7 @@ class MainWindow(QMainWindow):
         self.language = self.settings.value("language", "English")
         self.theme = self.settings.value("theme", "NEXUS Lime")
         self.sync_client = SyncClient(self.db, api_url=self.settings.value("cloud_api_url", "http://127.0.0.1:8000"), token=load_secret(self.settings, "cloud_access_token"), refresh_token=load_secret(self.settings, "cloud_refresh_token"), token_saver=self._save_cloud_tokens)
+        self.cloud_user: dict[str, str] = {}
         self._focus_total_seconds = 25 * 60
         self._focus_seconds = self._focus_total_seconds
         self._focus_running = False
@@ -795,6 +796,7 @@ class MainWindow(QMainWindow):
             return
         self.sync_client.token = ""
         self.sync_client.refresh_token = ""
+        self.cloud_user = {}
         self._save_cloud_tokens("", "")
         self.cloud_devices.clear()
         self.cloud_devices.setVisible(False)
@@ -843,12 +845,16 @@ class MainWindow(QMainWindow):
         if self.sync_client.token:
             self.sync_status.setText(f"● CLOUD CONNECTED  ·  {self.sync_client.api_url}")
             self.sync_status.setObjectName("StatusGood")
-            try:
-                user = self.sync_client._request("GET", "/me")
+            if not self.cloud_user:
+                try:
+                    self.cloud_user = self.sync_client._request("GET", "/me")
+                except SyncError:
+                    self.cloud_user = {}
+            if self.cloud_user:
                 self.cloud_profile_label.setText(
-                    f"☁  {user.get('name', user.get('username', 'NEXUS user'))}  ·  @{user.get('username', '')}"
+                    f"☁  {self.cloud_user.get('name', self.cloud_user.get('username', 'NEXUS user'))}  ·  @{self.cloud_user.get('username', '')}"
                 )
-            except SyncError:
+            else:
                 self.cloud_profile_label.setText("☁  Cloud profile connected")
             self.last_sync_label.setText(
                 f"Last sync: {self.sync_client.last_sync_at or 'never'}"
@@ -871,6 +877,7 @@ class MainWindow(QMainWindow):
             return
         try:
             user = self.sync_client.login(identifier.strip(), password)
+            self.cloud_user = user
             self._save_cloud_tokens(self.sync_client.token, self.sync_client.refresh_token)
             self._refresh_sync_status()
             self._message(f"Cloud connected as @{user['username']}.")
@@ -893,7 +900,8 @@ class MainWindow(QMainWindow):
             return
         try:
             user = self.sync_client.register(name.strip(), email.strip(), username.strip(), password)
-            self.settings.setValue("cloud_token", self.sync_client.token)
+            self.cloud_user = user
+            self._save_cloud_tokens(self.sync_client.token, self.sync_client.refresh_token)
             self._refresh_sync_status()
             self._message(f"Cloud account created for @{user['username']}.")
         except SyncError as error:
@@ -930,7 +938,11 @@ class MainWindow(QMainWindow):
             self._message(str(error))
 
     def _disconnect_cloud(self) -> None:
-        self.sync_client.logout()
+        try:
+            self.sync_client.logout()
+        except SyncError:
+            pass
+        self.cloud_user = {}
         clear_secret(self.settings, "cloud_access_token")
         clear_secret(self.settings, "cloud_refresh_token")
         self._refresh_sync_status()
