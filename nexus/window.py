@@ -289,6 +289,8 @@ class MainWindow(QMainWindow):
         login = QPushButton("Sign in")
         login.setObjectName("Primary")
         login.clicked.connect(self._login_account)
+        self.auth_password.returnPressed.connect(self._login_account)
+        self.auth_username.returnPressed.connect(lambda: self.auth_password.setFocus())
         self.auth_status = QLabel("")
         self.auth_status.setObjectName("Muted")
         box.addWidget(self.auth_username)
@@ -330,10 +332,17 @@ class MainWindow(QMainWindow):
         self._unlock_workspace()
 
     def _login_account(self) -> None:
-        if self.db.verify_profile_password(self.auth_password.text()):
+        password = self.auth_password.text()
+        if not password:
+            self.auth_status.setText("Enter your password.")
+            self.auth_password.setFocus()
+            return
+        if self.db.verify_profile_password(password):
             self._unlock_workspace()
         else:
             self.auth_status.setText("Incorrect password.")
+            self.auth_password.selectAll()
+            self.auth_password.setFocus()
 
     def _unlock_workspace(self) -> None:
         self.setCentralWidget(self._app_root)
