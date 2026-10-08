@@ -678,6 +678,9 @@ class MainWindow(QMainWindow):
             self.profile_name.setText(profile["name"])
             self.profile_email.setText(profile["email"])
             self.profile_username.setText(profile["username"])
+            if hasattr(self, "profile_stats"):
+                summary = self.db.account_summary()
+                self.profile_stats.setText(f'{summary["tasks_done"]}/{summary["tasks"]} quests  ·  {summary["xp"]} XP  ·  {summary["focus_sessions"]} focus sessions')
         box.addWidget(profile_card)
 
         box.addSpacing(8)
