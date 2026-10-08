@@ -14,9 +14,14 @@ from typing import Any
 
 class Database:
     def __init__(self, path: str | Path | None = None) -> None:
+        self._explicit_path = path is not None
         self.path = Path(path) if path else Path.home() / ".nexus" / "nexus.db"
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._accounts_dir = self.path.parent / f"{self.path.stem}_accounts"
+        self._accounts_index = self.path.parent / f"{self.path.stem}_accounts.db"
+        self._accounts_dir.mkdir(parents=True, exist_ok=True)
         self._initialize()
+        self._initialize_account_registry()
 
     def connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.path)
@@ -88,6 +93,104 @@ class Database:
         for name, definition in required.items():
             if name not in columns:
                 db.execute(f"ALTER TABLE profile ADD COLUMN {name} {definition}")
+
+    def _connect_accounts(self) -> sqlite3.Connection:
+        connection = sqlite3.connect(self._accounts_index)
+        connection.row_factory = sqlite3.Row
+        return connection
+
+    def _initialize_account_registry(self) -> None:
+        with self._connect_accounts() as db:
+            db.execute("""
+                CREATE TABLE IF NOT EXISTS accounts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    email TEXT NOT NULL UNIQUE COLLATE NOCASE,
+                    username TEXT NOT NULL UNIQUE COLLATE NOCASE,
+                    db_path TEXT NOT NULL UNIQUE,
+                    created_at TEXT NOT NULL
+                )
+            """)
+            profile = self.get_profile()
+            if profile and profile.get("password_hash"):
+                existing = db.execute(
+                    "SELECT id FROM accounts WHERE db_path = ? OR username = ? OR email = ?",
+                    (str(self.path), profile["username"], profile["email"]),
+                ).fetchone()
+                if not existing:
+                    db.execute(
+                        "INSERT INTO accounts(name, email, username, db_path, created_at) VALUES (?, ?, ?, ?, ?)",
+                        (profile["name"], profile["email"], profile["username"], str(self.path), profile.get("created_at") or self.now()),
+                    )
+
+    def list_accounts(self) -> list[dict[str, Any]]:
+        with self._connect_accounts() as db:
+            rows = db.execute("SELECT id, name, email, username, db_path, created_at FROM accounts ORDER BY name COLLATE NOCASE").fetchall()
+            return [dict(row) for row in rows]
+
+    def create_account(self, name: str, email: str, username: str, password: str) -> None:
+        name, email, username = name.strip(), email.strip().lower(), username.strip()
+        if not name:
+            raise ValueError("Name cannot be empty")
+        if not email or "@" not in email or "." not in email.rsplit("@", 1)[-1]:
+            raise ValueError("Enter a valid email")
+        if not username:
+            raise ValueError("Username cannot be empty")
+        if len(password) < 6:
+            raise ValueError("Password must be at least 6 characters")
+
+        with self._connect_accounts() as accounts:
+            if accounts.execute("SELECT 1 FROM accounts WHERE email = ? COLLATE NOCASE", (email,)).fetchone():
+                raise ValueError("That email is already registered on this PC.")
+            if accounts.execute("SELECT 1 FROM accounts WHERE username = ? COLLATE NOCASE", (username,)).fetchone():
+                raise ValueError("That username is already registered on this PC.")
+            account_id = int(accounts.execute("SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM accounts").fetchone()["next_id"])
+            db_path = self._accounts_dir / f"account_{account_id}.db"
+
+        old_path = self.path
+        self.path = db_path
+        try:
+            self._initialize()
+            self.save_profile(name, email, username, password, _register=False)
+            with self._connect_accounts() as accounts:
+                accounts.execute(
+                    "INSERT INTO accounts(id, name, email, username, db_path, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                    (account_id, name, email, username, str(db_path), self.now()),
+                )
+        except Exception:
+            self.path = old_path
+            if db_path.exists():
+                try:
+                    db_path.unlink()
+                except OSError:
+                    pass
+            raise
+
+    def authenticate_account(self, identifier: str, password: str) -> bool:
+        identifier = identifier.strip()
+        with self._connect_accounts() as accounts:
+            row = accounts.execute(
+                "SELECT * FROM accounts WHERE username = ? COLLATE NOCASE OR email = ? COLLATE NOCASE",
+                (identifier, identifier.lower()),
+            ).fetchone()
+        if not row:
+            return False
+        candidate = Path(row["db_path"])
+        if not candidate.exists():
+            return False
+        old_path = self.path
+        self.path = candidate
+        try:
+            if self.verify_profile_password(password):
+                return True
+            self.path = old_path
+            return False
+        except Exception:
+            self.path = old_path
+            raise
+
+    def current_account(self) -> dict[str, Any] | None:
+        return self.get_profile()
 
     @staticmethod
     def now() -> str:
@@ -251,7 +354,7 @@ class Database:
             row = db.execute("SELECT id, name, email, username, password_hash, created_at FROM profile WHERE id = 1").fetchone()
             return dict(row) if row else None
 
-    def save_profile(self, name: str, email: str, username: str, password: str = "") -> None:
+    def save_profile(self, name: str, email: str, username: str, password: str = "", _register: bool = True) -> None:
         name, email, username = name.strip(), email.strip(), username.strip()
         if not name:
             raise ValueError("Name cannot be empty")
@@ -265,7 +368,19 @@ class Database:
             password_hash = existing["password_hash"] if existing else ""
             if password:
                 password_hash = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 120_000).hex()
-            db.execute("INSERT INTO profile(id, name, email, username, password_hash, salt, created_at) VALUES (1, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name=excluded.name, email=excluded.email, username=excluded.username, password_hash=excluded.password_hash, salt=excluded.salt", (name, email, username, password_hash, salt, self.now()))
+            created_at = self.now()
+            db.execute("INSERT INTO profile(id, name, email, username, password_hash, salt, created_at) VALUES (1, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name=excluded.name, email=excluded.email, username=excluded.username, password_hash=excluded.password_hash, salt=excluded.salt", (name, email, username, password_hash, salt, created_at))
+
+        if _register:
+            with self._connect_accounts() as accounts:
+                existing = accounts.execute("SELECT id FROM accounts WHERE db_path = ?", (str(self.path),)).fetchone()
+                if existing:
+                    accounts.execute("UPDATE accounts SET name = ?, email = ?, username = ? WHERE id = ?", (name, email, username, existing["id"]))
+                elif password_hash:
+                    try:
+                        accounts.execute("INSERT INTO accounts(name, email, username, db_path, created_at) VALUES (?, ?, ?, ?, ?)", (name, email, username, str(self.path), created_at))
+                    except sqlite3.IntegrityError as error:
+                        raise ValueError("That email or username is already registered on this PC.") from error
 
     def verify_profile_password(self, password: str) -> bool:
         with self.connect() as db:
