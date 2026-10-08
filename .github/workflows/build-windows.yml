@@ -12,20 +12,39 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
+
       - name: Install dependencies
+        shell: pwsh
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller
-      - name: Build executable
-        run: pyinstaller --noconfirm --clean --windowed --name NEXUS main.py
+
+      - name: Build standalone Windows executable
+        shell: pwsh
+        run: |
+          pyinstaller --noconfirm --clean --windowed --onefile --name NEXUS --collect-all PySide6 main.py
+
+      - name: Verify executable
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "dist/NEXUS.exe")) {
+            throw "NEXUS.exe was not created"
+          }
+          $size = (Get-Item "dist/NEXUS.exe").Length
+          Write-Host "NEXUS.exe size: $size bytes"
+          if ($size -lt 10000000) {
+            throw "Executable looks suspiciously small"
+          }
+
       - uses: actions/upload-artifact@v4
         with:
           name: NEXUS-Windows
-          path: dist/NEXUS/
+          path: dist/NEXUS.exe
           if-no-files-found: error
           retention-days: 14
