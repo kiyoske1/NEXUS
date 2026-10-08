@@ -728,6 +728,21 @@ class MainWindow(QMainWindow):
         sync_row.addWidget(cloud_sync)
         sync_row.addWidget(cloud_disconnect)
         sync_box.addLayout(sync_row)
+
+        devices_label = QLabel("DEVICES")
+        devices_label.setObjectName("Tiny")
+        sync_box.addWidget(devices_label)
+        self.cloud_devices = QListWidget()
+        self.cloud_devices.setMaximumHeight(135)
+        self.cloud_devices.setVisible(False)
+        sync_box.addWidget(self.cloud_devices)
+        devices_row = QHBoxLayout()
+        refresh_devices = QPushButton("↻  Refresh devices")
+        refresh_devices.clicked.connect(self._refresh_cloud_devices)
+        devices_row.addWidget(refresh_devices)
+        devices_row.addStretch(1)
+        sync_box.addLayout(devices_row)
+
         box.addWidget(sync_card)
         self._refresh_sync_status()
 
@@ -750,6 +765,26 @@ class MainWindow(QMainWindow):
         layout.addStretch(1)
         return page
 
+
+    def _refresh_cloud_devices(self) -> None:
+        if not self.sync_client.token:
+            self.cloud_devices.clear()
+            self.cloud_devices.setVisible(False)
+            return
+        try:
+            devices = self.sync_client._request("GET", "/devices")
+        except SyncError as error:
+            QMessageBox.warning(self, "Devices", str(error))
+            return
+        self.cloud_devices.clear()
+        for device in devices:
+            current = "  ·  THIS DEVICE" if device.get("id") == self.sync_client.device_id else ""
+            item = QListWidgetItem(
+                f"{device.get('name', 'NEXUS device')}{current}\n"
+                f"Last seen: {device.get('last_seen_at', 'unknown')}"
+            )
+            self.cloud_devices.addItem(item)
+        self.cloud_devices.setVisible(bool(devices))
 
     def _save_cloud_tokens(self, access_token: str, refresh_token: str) -> None:
         if access_token:
