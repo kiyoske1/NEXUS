@@ -403,8 +403,8 @@ class MainWindow(QMainWindow):
         self._apply_language()
         self._apply_currency()
         self._recreate_sync_client_for_workspace()
-        self._cloud_timer.start()
         self.refresh_all()
+        self._cloud_timer.start()
 
     def _calendar_page(self) -> QWidget:
         page = QWidget()
