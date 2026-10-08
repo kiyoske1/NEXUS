@@ -915,6 +915,8 @@ class MainWindow(QMainWindow):
         pl.addWidget(heading("LAST 7 DAYS", "Tiny"))
         self.activity_chart = WeeklyActivityChart()
         pl.addWidget(self.activity_chart)
+        self.streak_badge = heading("0 DAY STREAK", "Pill")
+        pl.addWidget(self.streak_badge)
         pl.addStretch(1)
         focus_line = QHBoxLayout()
         focus_line.addWidget(heading("FOCUS MINUTES", "Tiny"))
@@ -1221,6 +1223,8 @@ class MainWindow(QMainWindow):
         self.overview_habits.setText(self._tr("You're building consistency.") if stats["habits_total"] else self._tr("Add one small habit to begin."))
         self.focus_minutes_copy.setText(f'{stats["focus_minutes"]} min')
         self._refresh_dashboard_summary()
+        if hasattr(self, "streak_badge"):
+            self.streak_badge.setText(f'{self.db.streak_days()} DAY STREAK')
         if hasattr(self, "notification_button"):
             unread = self.db.unread_notification_count()
             self.notification_button.setText(f"◉  {unread}")
