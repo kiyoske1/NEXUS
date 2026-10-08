@@ -12,6 +12,9 @@ NEXUS is designed around one idea: make progress visible without turning your li
 ## Current release
 
 The first version is an early foundation with:
+- Premium dark desktop interface with graphite, lavender, and acid-lime accents
+- Editorial dashboard with quest progress, daily habit check-ins, and focus stats
+- Consistent card-based layouts across the main sections
 - Overview dashboard with daily progress and quick stats
 - Quests with XP rewards
 - Habit check-ins
@@ -78,9 +81,12 @@ The database is stored in your user home directory at `~/.nexus/nexus.db`. Your 
 - [x] Quests, habits, focus, finance, journal
 - [ ] Habit streaks and weekly insights
 - [ ] Search and calendar
-- [ ] Export and database backup
-- [ ] Windows executable build
-- [ ] Keyboard shortcuts and accessibility pass
+- [x] Export and database backup
+- [x] Windows executable build pipeline
+- [x] Keyboard shortcuts for navigation and quick actions
+- [ ] Habit streaks and weekly insights
+- [ ] Search and calendar
+- [ ] Accessibility and responsive-layout pass
 
 ## Project principles
 
