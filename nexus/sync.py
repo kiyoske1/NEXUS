@@ -165,7 +165,10 @@ class SyncClient:
                 "updated_at": _now(),
                 "deleted": record.get("deleted", False),
             })
-        result = self._request("POST", "/sync/push", {"records": wire[:500]})
+        result = {"accepted": 0}
+        for start in range(0, len(wire), 500):
+            chunk = self._request("POST", "/sync/push", {"records": wire[start:start + 500]})
+            result["accepted"] += int(chunk.get("accepted", 0))
         now = _now()
         with self.database.connect() as db:
             for record in records:
@@ -231,7 +234,10 @@ class SyncClient:
         query = "" if not since else f"?since={urllib.parse.quote(since)}"
         result = self._request("GET", f"/sync/pull{query}")
         applied = 0
-        for record in result.get("records", []):
+        records = result.get("records", [])
+        order = {"habits": 0, "tasks": 1, "transactions": 2, "journal_entries": 3, "focus_sessions": 4, "habit_logs": 5}
+        records.sort(key=lambda record: order.get(record.get("entity"), 99))
+        for record in records:
             if record.get("deleted"):
                 self._delete_remote(record["entity"], record["client_id"])
             else:
