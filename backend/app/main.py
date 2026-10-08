@@ -10,7 +10,7 @@ from .config import settings
 from .storage import connect
 import uuid
 
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, EmailStr, Field
 
@@ -19,7 +19,37 @@ DEFAULT_DB_PATH = APP_DIR / "nexus_server.db"
 TOKEN_TTL_MINUTES = settings.access_token_minutes
 REFRESH_TTL_DAYS = settings.refresh_token_days
 bearer = HTTPBearer(auto_error=False)
-app = FastAPI(title="NEXUS API", version="0.4.0")
+API_VERSION = "1.0.0"
+API_PREFIX = "/api/v1"
+LEGACY_PATHS = {
+    "/health", "/auth/register", "/auth/login", "/auth/refresh", "/auth/logout",
+    "/auth/logout-all", "/me", "/devices", "/sync", "/sync/pull", "/sync/push",
+}
+
+app = FastAPI(
+    title="NEXUS API",
+    version=API_VERSION,
+    docs_url=f"{API_PREFIX}/docs",
+    redoc_url=f"{API_PREFIX}/redoc",
+    openapi_url=f"{API_PREFIX}/openapi.json",
+)
+api = APIRouter(prefix=API_PREFIX, tags=["v1"])
+
+@app.middleware("http")
+async def legacy_api_redirect(request: Request, call_next):
+    path = request.scope.get("path", "")
+    if path in LEGACY_PATHS or any(path.startswith(prefix + "/") for prefix in LEGACY_PATHS):
+        request.scope["path"] = f"{API_PREFIX}{path}"
+        request.scope["raw_path"] = request.scope["path"].encode("utf-8")
+        response = await call_next(request)
+        response.headers["X-NEXUS-API-Version"] = API_VERSION
+        response.headers["Deprecation"] = "true"
+        return response
+    response = await call_next(request)
+    if request.scope.get("path", "").startswith(API_PREFIX):
+        response.headers["X-NEXUS-API-Version"] = API_VERSION
+    return response
+
 
 if settings.cors_origins:
     from fastapi.middleware.cors import CORSMiddleware
@@ -150,12 +180,12 @@ class SyncPushIn(BaseModel):
     records: list[SyncRecordIn] = Field(default_factory=list, max_length=500)
 
 
-@app.get("/health")
+@api.get("/health")
 def health():
     return {"status": "ok", "service": "nexus-api", "version": app.version}
 
 
-@app.post("/auth/register", response_model=TokenOut, status_code=201)
+@api.post("/auth/register", response_model=TokenOut, status_code=201)
 def register(data: RegisterIn):
     if len(data.password) < 6:
         raise HTTPException(400, "Password must be at least 6 characters")
@@ -181,7 +211,7 @@ def register(data: RegisterIn):
     return {"access_token": access_token, "refresh_token": refresh_token, "device_id": device_id, "user": dict(row)}
 
 
-@app.post("/auth/login", response_model=TokenOut)
+@api.post("/auth/login", response_model=TokenOut)
 def login(data: LoginIn):
     conn = db()
     value = data.username_or_email.strip()
@@ -198,7 +228,7 @@ def login(data: LoginIn):
     return {"access_token": access_token, "refresh_token": refresh_token, "device_id": device_id, "user": dict(row)}
 
 
-@app.post("/auth/refresh", response_model=TokenOut)
+@api.post("/auth/refresh", response_model=TokenOut)
 def refresh(data: RefreshIn):
     conn = db()
     row = conn.execute(
@@ -227,7 +257,7 @@ def refresh(data: RefreshIn):
     }
 
 
-@app.get("/devices", response_model=list[DeviceOut])
+@api.get("/devices", response_model=list[DeviceOut])
 def devices(user=Depends(current_user)):
     conn = db()
     rows = conn.execute(
@@ -238,7 +268,7 @@ def devices(user=Depends(current_user)):
     return [dict(r) for r in rows]
 
 
-@app.delete("/devices/{device_id}")
+@api.delete("/devices/{device_id}")
 def revoke_device(device_id: str, user=Depends(current_user)):
     conn = db()
     row = conn.execute(
@@ -255,7 +285,7 @@ def revoke_device(device_id: str, user=Depends(current_user)):
     return {"ok": True}
 
 
-@app.post("/auth/logout-all")
+@api.post("/auth/logout-all")
 def logout_all(user=Depends(current_user)):
     conn = db()
     conn.execute("DELETE FROM sessions WHERE user_id=?", (user["id"],))
@@ -265,7 +295,7 @@ def logout_all(user=Depends(current_user)):
     return {"ok": True}
 
 
-@app.post("/auth/logout")
+@api.post("/auth/logout")
 def logout(credentials: HTTPAuthorizationCredentials = Depends(bearer)):
     if not credentials:
         return {"ok": True}
@@ -285,18 +315,18 @@ def logout(credentials: HTTPAuthorizationCredentials = Depends(bearer)):
     return {"ok": True}
 
 
-@app.get("/me", response_model=UserOut)
+@api.get("/me", response_model=UserOut)
 def me(user=Depends(current_user)):
     return user
 
 
-@app.get("/sync")
+@api.get("/sync")
 def sync(user=Depends(current_user)):
     return {"user_id": user["id"], "server_time": now_utc(),
             "message": "Use /sync/pull and /sync/push for data synchronization."}
 
 
-@app.get("/sync/pull")
+@api.get("/sync/pull")
 def sync_pull(since: str | None = None, user=Depends(current_user)):
     conn = db()
     query = """SELECT entity, client_id, payload, updated_at, deleted
@@ -319,7 +349,7 @@ def sync_pull(since: str | None = None, user=Depends(current_user)):
     }
 
 
-@app.post("/sync/push")
+@api.post("/sync/push")
 def sync_push(data: SyncPushIn, user=Depends(current_user)):
     conn = db()
     accepted = 0
@@ -346,3 +376,17 @@ def sync_push(data: SyncPushIn, user=Depends(current_user)):
     conn.commit()
     conn.close()
     return {"accepted": accepted, "server_time": now_utc()}
+
+
+@api.get("", tags=["v1"])
+def api_root():
+    return {
+        "service": "nexus-api",
+        "version": API_VERSION,
+        "status": "ok",
+        "docs": f"{API_PREFIX}/docs",
+        "openapi": f"{API_PREFIX}/openapi.json",
+    }
+
+
+app.include_router(api)
