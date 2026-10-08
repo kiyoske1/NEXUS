@@ -264,8 +264,12 @@ class MainWindow(QMainWindow):
             "Know where your money goes.":"Знай, куда уходят деньги.","Recent activity":"Последние операции","＋  Add entry":"＋  Добавить операцию",
             "Expense":"Расход","Income":"Доход","Clear your head.":"Освободи голову.","Recent entries":"Последние записи",
             "Search titles and thoughts…":"Поиск по заметкам…","Save entry  ↗":"Сохранить запись  ↗","Delete selected entry":"Удалить выбранную запись",
-            "Personalize NEXUS":"Настройка NEXUS","Appearance":"Оформление","Interface language":"Язык интерфейса","Currency":"Валюта",
-            "Edit quest":"Редактировать задачу","Edit habit":"Редактировать привычку","Edit transaction":"Редактировать операцию","Edit note":"Редактировать заметку"
+            "Personalize NEXUS":"Настройка NEXUS","Your profile":"Ваш профиль","Save profile":"Сохранить профиль","Display name":"Имя","Email":"Email","Username":"Имя пользователя","Profile saved.":"Профиль сохранён.","Appearance":"Оформление","Interface language":"Язык интерфейса","Currency":"Валюта",
+            "Edit quest":"Редактировать задачу","Edit habit":"Редактировать привычку","Edit transaction":"Редактировать операцию","Edit note":"Редактировать заметку",
+            "You're building consistency.":"Ты формируешь стабильность.","Add one small habit to begin.":"Добавь одну маленькую привычку.",
+            "Your next win is waiting.":"Следующая победа уже ждёт.","quest":"задача","quests":"задач","No open quests. Add a small win.":"Открытых задач нет. Добавь маленькую победу.",
+            "Timer reset.":"Таймер сброшен.","Session complete. Nice work.":"Сессия завершена. Хорошая работа.","Focus mode active. Keep going.":"Фокус включён. Продолжай.",
+            "Paused. Resume when ready.":"Пауза. Продолжи, когда будешь готов.","Ready when you are.":"Готов, когда готов ты."
         };
         const ro = {
             "WORKSPACE":"SPAȚIU DE LUCRU","YOUR SYSTEM":"SISTEMUL TĂU","A little progress, every day.":"Puțin progres, în fiecare zi.",
@@ -277,14 +281,20 @@ class MainWindow(QMainWindow):
             "Know where your money goes.":"Știi unde merg banii.","Recent activity":"Activitate recentă","＋  Add entry":"＋  Adaugă operație",
             "Expense":"Cheltuială","Income":"Venit","Clear your head.":"Eliberează-ți mintea.","Recent entries":"Înregistrări recente",
             "Search titles and thoughts…":"Caută în notițe…","Save entry  ↗":"Salvează ↗","Delete selected entry":"Șterge înregistrarea",
-            "Personalize NEXUS":"Personalizează NEXUS","Appearance":"Aspect","Interface language":"Limba interfeței","Currency":"Valută",
-            "Edit quest":"Editează sarcina","Edit habit":"Editează obiceiul","Edit transaction":"Editează operația","Edit note":"Editează nota"
+            "Personalize NEXUS":"Personalizează NEXUS","Your profile":"Profilul tău","Save profile":"Salvează profilul","Display name":"Nume","Email":"Email","Username":"Utilizator","Profile saved.":"Profil salvat.","Appearance":"Aspect","Interface language":"Limba interfeței","Currency":"Valută",
+            "Edit quest":"Editează sarcina","Edit habit":"Editează obiceiul","Edit transaction":"Editează operația","Edit note":"Editează nota",
+            "You're building consistency.":"Îți construiești consecvența.","Add one small habit to begin.":"Adaugă un obicei mic.",
+            "Your next win is waiting.":"Următoarea victorie te așteaptă.","No open quests. Add a small win.":"Nu ai sarcini deschise. Adaugă o mică victorie.",
+            "Timer reset.":"Cronometrul a fost resetat.","Session complete. Nice work.":"Sesiunea s-a încheiat. Bravo.","Focus mode active. Keep going.":"Modul focus este activ. Continuă.",
+            "Paused. Resume when ready.":"Pauză. Reia când ești gata.","Ready when you are.":"Gata când ești."
         };
         return self.language == "Русский" ? (ru[text] || text) : self.language == "Română" ? (ro[text] || text) : text;
 
     def _translate_tree(self) -> None:
         from PySide6.QtWidgets import QApplication
         for widget in QApplication.allWidgets():
+            if widget.objectName() in {"Nav", "Hero"} or widget is getattr(self, "page_title", None):
+                continue
             if isinstance(widget, (QLabel, QPushButton)):
                 original = widget.property("nexus_original_text")
                 if original is None:
@@ -359,6 +369,35 @@ class MainWindow(QMainWindow):
         money_row.addWidget(self.currency_combo)
         box.addLayout(money_row)
 
+
+        profile_card = panel()
+        profile_box = QVBoxLayout(profile_card)
+        profile_box.setContentsMargins(18, 16, 18, 16)
+        profile_box.setSpacing(10)
+        profile_box.addWidget(heading("Your profile", "Section"))
+        profile_box.addWidget(QLabel("Local profile now. Cloud sync and Google sign-in can be connected later without changing your data model."))
+        profile_row = QHBoxLayout()
+        self.profile_name = QLineEdit()
+        self.profile_name.setPlaceholderText("Display name")
+        self.profile_email = QLineEdit()
+        self.profile_email.setPlaceholderText("Email")
+        self.profile_username = QLineEdit()
+        self.profile_username.setPlaceholderText("Username")
+        save_profile = QPushButton("Save profile")
+        save_profile.setObjectName("Primary")
+        save_profile.clicked.connect(self._save_profile)
+        profile_row.addWidget(self.profile_name, 2)
+        profile_row.addWidget(self.profile_email, 2)
+        profile_row.addWidget(self.profile_username, 2)
+        profile_row.addWidget(save_profile)
+        profile_box.addLayout(profile_row)
+        profile = self.db.get_profile()
+        if profile:
+            self.profile_name.setText(profile["name"])
+            self.profile_email.setText(profile["email"])
+            self.profile_username.setText(profile["username"])
+        box.addWidget(profile_card)
+
         box.addSpacing(8)
         box.addWidget(heading("NEXUS // LOCAL CONFIG", "Tiny"))
         box.addWidget(QLabel("No account required. Preferences are stored with your desktop app settings."))
@@ -366,6 +405,14 @@ class MainWindow(QMainWindow):
         layout.addWidget(card)
         layout.addStretch(1)
         return page
+
+
+    def _save_profile(self) -> None:
+        try:
+            self.db.save_profile(self.profile_name.text(), self.profile_email.text(), self.profile_username.text())
+            self._message(self._tr("Profile saved.") if self.language != "English" else "Profile saved.")
+        except ValueError as error:
+            self._message(str(error))
 
     def _change_theme(self, theme: str) -> None:
         self.theme = theme
