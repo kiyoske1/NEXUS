@@ -265,6 +265,9 @@ class MainWindow(QMainWindow):
             "Expense":"Расход","Income":"Доход","Clear your head.":"Освободи голову.","Recent entries":"Последние записи",
             "Search titles and thoughts…":"Поиск по заметкам…","Save entry  ↗":"Сохранить запись  ↗","Delete selected entry":"Удалить выбранную запись",
             "Personalize NEXUS":"Настройка NEXUS","Your profile":"Ваш профиль","Save profile":"Сохранить профиль","Display name":"Имя","Email":"Email","Username":"Имя пользователя","Profile saved.":"Профиль сохранён.","Appearance":"Оформление","Interface language":"Язык интерфейса","Currency":"Валюта",
+            
+            "quest":"задача","quests":"задач","left to move forward.":"осталось до следующего шага.","habits complete":"привычек выполнено","quests completed overall":"задач выполнено всего","focus minutes logged":"минут фокуса",
+            "No open quests. Enjoy the breathing room.":"Открытых задач нет. Можно выдохнуть.","No completed quests yet.":"Выполненных задач пока нет.","Your quest board is clear. Add the first one.":"Список задач пуст. Добавь первую.",
             "Edit quest":"Редактировать задачу","Edit habit":"Редактировать привычку","Edit transaction":"Редактировать операцию","Edit note":"Редактировать заметку",
             "You're building consistency.":"Ты формируешь стабильность.","Add one small habit to begin.":"Добавь одну маленькую привычку.",
             "Your next win is waiting.":"Следующая победа уже ждёт.","quest":"задача","quests":"задач","No open quests. Add a small win.":"Открытых задач нет. Добавь маленькую победу.",
@@ -282,6 +285,9 @@ class MainWindow(QMainWindow):
             "Expense":"Cheltuială","Income":"Venit","Clear your head.":"Eliberează-ți mintea.","Recent entries":"Înregistrări recente",
             "Search titles and thoughts…":"Caută în notițe…","Save entry  ↗":"Salvează ↗","Delete selected entry":"Șterge înregistrarea",
             "Personalize NEXUS":"Personalizează NEXUS","Your profile":"Profilul tău","Save profile":"Salvează profilul","Display name":"Nume","Email":"Email","Username":"Utilizator","Profile saved.":"Profil salvat.","Appearance":"Aspect","Interface language":"Limba interfeței","Currency":"Valută",
+            
+            "quest":"sarcină","quests":"sarcini","left to move forward.":"până la următorul pas.","habits complete":"obiceiuri finalizate","quests completed overall":"sarcini finalizate în total","focus minutes logged":"minute de focus",
+            "No open quests. Enjoy the breathing room.":"Nu ai sarcini deschise. Poți respira.","No completed quests yet.":"Nu există sarcini finalizate.","Your quest board is clear. Addă prima.",
             "Edit quest":"Editează sarcina","Edit habit":"Editează obiceiul","Edit transaction":"Editează operația","Edit note":"Editează nota",
             "You're building consistency.":"Îți construiești consecvența.","Add one small habit to begin.":"Adaugă un obicei mic.",
             "Your next win is waiting.":"Următoarea victorie te așteaptă.","No open quests. Add a small win.":"Nu ai sarcini deschise. Adaugă o mică victorie.",
@@ -840,11 +846,11 @@ class MainWindow(QMainWindow):
         self.metric_labels["balance"].setText(self._money(stats["balance"]))
         self.hero_xp_label.setText(f'{stats["xp"]} XP')
         open_quests = stats["tasks_total"] - stats["tasks_done"]
-        self.hero_quest_copy.setText(f'{open_quests} quest{"s" if open_quests != 1 else ""} left to move forward.')
+        self.hero_quest_copy.setText(f'{open_quests} {self._tr("quests" if open_quests != 1 else "quest")} {self._tr("left to move forward.")}')
         habit_pct = round(stats["habits_done"] / stats["habits_total"] * 100) if stats["habits_total"] else 0
         self.habits_progress.setValue(habit_pct)
-        self.habits_copy.setText(f'{stats["habits_done"]} of {stats["habits_total"]} habits complete')
-        self.overview_habits.setText("You're building consistency." if stats["habits_total"] else "Add one small habit to begin.")
+        self.habits_copy.setText(f'{stats["habits_done"]} / {stats["habits_total"]} {self._tr("habits complete")}')
+        self.overview_habits.setText(self._tr("You're building consistency.") if stats["habits_total"] else self._tr("Add one small habit to begin."))
         self.focus_minutes_copy.setText(f'{stats["focus_minutes"]} min')
         self.activity_chart.set_data(self.db.weekly_activity())
         pending = self.db.get_tasks(include_done=False)
@@ -852,11 +858,11 @@ class MainWindow(QMainWindow):
         for task in pending[:5]:
             self.overview_tasks.addItem(f'○  {task["title"]}   ·   {task["xp"]} XP')
         if not pending:
-            self.overview_tasks.addItem("No open quests. Add a small win.")
+            self.overview_tasks.addItem(self._tr("No open quests. Add a small win."))
         total = stats["tasks_total"]
         pct = round(stats["tasks_done"] / total * 100) if total else 0
         self.daily_progress.setValue(pct)
-        self.progress_copy.setText(f'{stats["tasks_done"]} of {total} quests completed overall · {stats["focus_minutes"]} focus minutes logged')
+        self.progress_copy.setText(f'{stats["tasks_done"]} / {total} {self._tr("quests completed overall")} · {stats["focus_minutes"]} {self._tr("focus minutes logged")}')
         if hasattr(self, "task_list"):
             self._refresh_task_list()
         if hasattr(self, "habit_list"):
@@ -888,7 +894,7 @@ class MainWindow(QMainWindow):
             mark = "✓" if task["done"] else "○"
             self.task_list.addItem(f'{mark}  {task["title"]}   ·   {task["category"]}   ·   {task["xp"]} XP   ·   #{task["id"]}')
         if not tasks:
-            empty = "No open quests. Enjoy the breathing room." if mode == "open" else "No completed quests yet." if mode == "done" else "Your quest board is clear. Add the first one."
+            empty = self._tr("No open quests. Enjoy the breathing room.") if mode == "open" else self._tr("No completed quests yet.") if mode == "done" else self._tr("Your quest board is clear. Add the first one.")
             self.task_list.addItem(empty)
 
     def _selected_id(self, widget: QListWidget) -> int | None:
@@ -1020,11 +1026,11 @@ class MainWindow(QMainWindow):
         if self._focus_running:
             self._timer.stop()
             self._focus_running = False
-            self.focus_status.setText("Paused. Resume when ready.")
+            self.focus_status.setText(self._tr("Paused. Resume when ready."))
         else:
             self._timer.start()
             self._focus_running = True
-            self.focus_status.setText("Focus mode active. Keep going.")
+            self.focus_status.setText(self._tr("Focus mode active. Keep going."))
     def _tick(self) -> None:
         self._focus_seconds -= 1
         self.focus_time.setText(f"{self._focus_seconds // 60:02d}:{self._focus_seconds % 60:02d}")
@@ -1033,7 +1039,7 @@ class MainWindow(QMainWindow):
             self._timer.stop()
             self._focus_running = False
             self.db.add_focus_session(max(1, self._focus_total_seconds // 60))
-            self.focus_status.setText("Session complete. Nice work.")
+            self.focus_status.setText(self._tr("Session complete. Nice work."))
             QMessageBox.information(self, "NEXUS Focus", f"{self._focus_total_seconds // 60} minutes complete. Take a short break.")
             self.refresh_all()
 
@@ -1055,7 +1061,7 @@ class MainWindow(QMainWindow):
         self._focus_seconds = self._focus_total_seconds
         self.focus_time.setText(f"{self._focus_seconds // 60:02d}:{self._focus_seconds % 60:02d}")
         self.focus_progress.setValue(self._focus_total_seconds)
-        self.focus_status.setText("Timer reset.")
+        self.focus_status.setText(self._tr("Timer reset."))
 
     def _add_transaction(self) -> None:
         try:
