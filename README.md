@@ -17,10 +17,11 @@ The first version is an early foundation with:
 - Consistent card-based layouts across the main sections
 - Overview dashboard with daily progress and quick stats
 - Quests with XP rewards
-- Habit check-ins
-- Focus timer
+- Habit check-ins with daily streak tracking
+- Seven-day activity chart for focus sessions, completed quests, and habit check-ins
+- Focus timer with configurable sessions
 - Simple income and expense tracking
-- Private journal
+- Searchable private journal with entry deletion
 - Local SQLite database
 
 ## Stack
@@ -79,13 +80,13 @@ The database is stored in your user home directory at `~/.nexus/nexus.db`. Your 
 - [x] Initial desktop shell and navigation
 - [x] SQLite persistence
 - [x] Quests, habits, focus, finance, journal
-- [ ] Habit streaks and weekly insights
-- [ ] Search and calendar
+- [x] Habit streaks and seven-day activity chart
+- [x] Journal search and entry deletion
+- [x] Open/completed quest filters
 - [x] Export and database backup
 - [x] Windows executable build pipeline
 - [x] Keyboard shortcuts for navigation and quick actions
-- [ ] Habit streaks and weekly insights
-- [ ] Search and calendar
+- [ ] Calendar and richer analytics
 - [ ] Accessibility and responsive-layout pass
 
 ## Project principles
