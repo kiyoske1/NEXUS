@@ -19,7 +19,6 @@ from typing import Any
 
 
 API_PREFIX = "/api/v1"
-API_PREFIX = "/api/v1"
 TABLES = ("tasks", "habits", "habit_logs", "transactions", "journal_entries", "focus_sessions")
 SYNC_META = """
 CREATE TABLE IF NOT EXISTS sync_meta (
@@ -30,6 +29,17 @@ CREATE TABLE IF NOT EXISTS sync_meta (
     synced_at TEXT NOT NULL,
     PRIMARY KEY(entity, client_id)
 );
+CREATE TABLE IF NOT EXISTS sync_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    started_at TEXT NOT NULL,
+    finished_at TEXT,
+    status TEXT NOT NULL,
+    pushed INTEGER NOT NULL DEFAULT 0,
+    pulled INTEGER NOT NULL DEFAULT 0,
+    conflicts INTEGER NOT NULL DEFAULT 0,
+    error TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_sync_history_started ON sync_history(started_at DESC);
 CREATE TABLE IF NOT EXISTS sync_conflicts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     entity TEXT NOT NULL,
@@ -291,6 +301,25 @@ class SyncClient:
         return {"accepted": result.get("accepted", 0), "sent": len(records)}
 
 
+
+    def list_history(self, limit: int = 25) -> list[dict[str, Any]]:
+        limit = max(1, min(int(limit), 100))
+        with self.database.connect() as db:
+            rows = db.execute(
+                "SELECT id, started_at, finished_at, status, pushed, pulled, conflicts, error "
+                "FROM sync_history ORDER BY started_at DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def _record_history(self, started_at: str, status: str, pushed: int = 0, pulled: int = 0, conflicts: int = 0, error: str = "") -> None:
+        with self.database.connect() as db:
+            db.execute(
+                "INSERT INTO sync_history(started_at,finished_at,status,pushed,pulled,conflicts,error) VALUES(?,?,?,?,?,?,?)",
+                (started_at, _now(), status, int(pushed), int(pulled), int(conflicts), error[:1000]),
+            )
+            db.commit()
+
     def _upsert_remote(self, entity: str, client_id: str, payload: dict[str, Any]) -> None:
         table = entity
         if table not in TABLES:
@@ -377,6 +406,15 @@ class SyncClient:
         return {"applied": applied, "server_time": server_time}
 
     def sync(self) -> dict[str, Any]:
-        pulled = self.pull()
-        pushed = self.push()
-        return {"pulled": pulled["applied"], "pushed": pushed["sent"], "accepted": pushed["accepted"]}
+        started_at = _now()
+        try:
+            pulled = self.pull()
+            pushed = self.push()
+            conflicts = len(self.list_conflicts())
+            result = {"pulled": pulled["applied"], "pushed": pushed["sent"], "accepted": pushed["accepted"], "conflicts": conflicts}
+            self._record_history(started_at, "success" if conflicts == 0 else "conflicts", result["pushed"], result["pulled"], conflicts)
+            return result
+        except Exception as error:
+            conflicts = len(self.list_conflicts())
+            self._record_history(started_at, "error", conflicts=conflicts, error=str(error))
+            raise
