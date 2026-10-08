@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 from nexus.database import Database
 from nexus.backup import create_backup, create_full_backup, export_json
 from nexus.charts import WeeklyActivityChart
+from nexus.sync import SyncClient, SyncError
 
 
 STYLES = """
@@ -89,6 +90,7 @@ class MainWindow(QMainWindow):
         self.currency = self.settings.value("currency", "RUB")
         self.language = self.settings.value("language", "English")
         self.theme = self.settings.value("theme", "NEXUS Lime")
+        self.sync_client = SyncClient(self.db, token=self.settings.value("cloud_token", ""))
         self._focus_total_seconds = 25 * 60
         self._focus_seconds = self._focus_total_seconds
         self._focus_running = False
@@ -656,7 +658,7 @@ class MainWindow(QMainWindow):
         profile_box.setContentsMargins(18, 16, 18, 16)
         profile_box.setSpacing(10)
         profile_box.addWidget(heading("Your profile", "Section"))
-        profile_box.addWidget(QLabel("Local profile now. Cloud sync and Google sign-in can be connected later without changing your data model."))
+        profile_box.addWidget(QLabel("Local profile and cloud identity are separate by design. Your local workspace stays available offline."))
         profile_row = QHBoxLayout()
         self.profile_name = QLineEdit()
         self.profile_name.setPlaceholderText("Display name")
@@ -689,6 +691,30 @@ class MainWindow(QMainWindow):
                 self.profile_stats.setText(f'{summary["tasks_done"]}/{summary["tasks"]} quests  ·  {summary["xp"]} XP  ·  {summary["focus_sessions"]} focus sessions')
         box.addWidget(profile_card)
 
+        sync_card = panel()
+        sync_box = QVBoxLayout(sync_card)
+        sync_box.setContentsMargins(18, 16, 18, 16)
+        sync_box.setSpacing(10)
+        sync_box.addWidget(heading("Cloud sync", "Section"))
+        sync_box.addWidget(QLabel("Optional encrypted-in-transit sync between this desktop and your NEXUS API account."))
+        self.sync_status = QLabel()
+        self.sync_status.setObjectName("Muted")
+        sync_box.addWidget(self.sync_status)
+        sync_row = QHBoxLayout()
+        cloud_connect = QPushButton("☁  Connect cloud account")
+        cloud_connect.clicked.connect(self._connect_cloud)
+        cloud_sync = QPushButton("↻  Sync now")
+        cloud_sync.setObjectName("Primary")
+        cloud_sync.clicked.connect(self._cloud_sync)
+        cloud_disconnect = QPushButton("Disconnect")
+        cloud_disconnect.clicked.connect(self._disconnect_cloud)
+        sync_row.addWidget(cloud_connect)
+        sync_row.addWidget(cloud_sync)
+        sync_row.addWidget(cloud_disconnect)
+        sync_box.addLayout(sync_row)
+        box.addWidget(sync_card)
+        self._refresh_sync_status()
+
         box.addSpacing(8)
         account_card = panel()
         account_box = QVBoxLayout(account_card)
@@ -708,6 +734,51 @@ class MainWindow(QMainWindow):
         layout.addStretch(1)
         return page
 
+
+    def _refresh_sync_status(self) -> None:
+        if not hasattr(self, "sync_status"):
+            return
+        if self.sync_client.token:
+            self.sync_status.setText(f"● CLOUD CONNECTED  ·  {self.sync_client.api_url}")
+            self.sync_status.setObjectName("StatusGood")
+        else:
+            self.sync_status.setText(f"○ CLOUD OFFLINE  ·  API {self.sync_client.api_url}")
+            self.sync_status.setObjectName("StatusWarn")
+        self.sync_status.style().unpolish(self.sync_status)
+        self.sync_status.style().polish(self.sync_status)
+
+    def _connect_cloud(self) -> None:
+        identifier, ok = QInputDialog.getText(self, "Connect cloud account", "Username or email:")
+        if not ok or not identifier.strip():
+            return
+        password, ok = QInputDialog.getText(self, "Connect cloud account", "Cloud password:", QLineEdit.EchoMode.Password)
+        if not ok:
+            return
+        try:
+            user = self.sync_client.login(identifier.strip(), password)
+            self.settings.setValue("cloud_token", self.sync_client.token)
+            self._refresh_sync_status()
+            self._message(f"Cloud connected as @{user['username']}.")
+        except SyncError as error:
+            self._message(str(error))
+
+    def _cloud_sync(self) -> None:
+        if not self.sync_client.token:
+            self._connect_cloud()
+            if not self.sync_client.token:
+                return
+        try:
+            result = self.sync_client.sync()
+            self.refresh_all()
+            self._message(f"Sync complete. Pulled {result['pulled']} records, pushed {result['pushed']}.")
+        except SyncError as error:
+            self._message(str(error))
+
+    def _disconnect_cloud(self) -> None:
+        self.sync_client.logout()
+        self.settings.remove("cloud_token")
+        self._refresh_sync_status()
+        self._message("Cloud account disconnected. Local data remains untouched.")
 
     def _switch_account(self) -> None:
         answer = QMessageBox.question(self, "Switch account", "Return to the account chooser?\n\nYour local NEXUS data will remain on this PC.", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.Yes)
