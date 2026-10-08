@@ -563,6 +563,10 @@ class MainWindow(QMainWindow):
         entries_layout = QVBoxLayout(entries)
         entries_layout.setContentsMargins(15, 15, 15, 15)
         entries_layout.addWidget(heading("Recent entries", "Section"))
+        self.journal_search = QLineEdit()
+        self.journal_search.setPlaceholderText("Search titles and thoughts…")
+        self.journal_search.textChanged.connect(self._filter_journal_entries)
+        entries_layout.addWidget(self.journal_search)
         self.journal_list = QListWidget()
         self.journal_list.itemDoubleClicked.connect(self._open_journal_entry)
         entries_layout.addWidget(self.journal_list, 1)
@@ -616,9 +620,7 @@ class MainWindow(QMainWindow):
                 sign = "+" if item["kind"] == "income" else "−"
                 self.money_list.addItem(f'{sign} {item["amount"]:.2f}   ·   {item["title"]}   ·   {item["created_at"][:10]}')
         if hasattr(self, "journal_list"):
-            self.journal_list.clear()
-            for entry in self.db.get_journal_entries():
-                self.journal_list.addItem(f'{entry["title"]}   ·   {entry["created_at"][:16].replace("T", " ")}   ·   #{entry["id"]}')
+            self._filter_journal_entries()
 
     def _selected_id(self, widget: QListWidget) -> int | None:
         item = widget.currentItem()
@@ -755,6 +757,22 @@ class MainWindow(QMainWindow):
         entry = next((row for row in self.db.get_journal_entries() if row["id"] == entry_id), None)
         if entry:
             QMessageBox.information(self, entry["title"], entry["body"] or "(Empty entry)")
+
+    def _filter_journal_entries(self, query: str | None = None) -> None:
+        if not hasattr(self, "journal_list"):
+            return
+        search = (self.journal_search.text() if query is None else query).strip().casefold()
+        self.journal_list.clear()
+        entries = self.db.get_journal_entries()
+        matches = [
+            entry for entry in entries
+            if not search or search in entry["title"].casefold() or search in entry["body"].casefold()
+        ]
+        for entry in matches:
+            stamp = entry["created_at"][:16].replace("T", " ")
+            self.journal_list.addItem(f'{entry["title"]}   ·   {stamp}   ·   #{entry["id"]}')
+        if not matches:
+            self.journal_list.addItem("No matching entries yet.")
 
     def _backup_database(self) -> None:
         path, _ = QFileDialog.getSaveFileName(
