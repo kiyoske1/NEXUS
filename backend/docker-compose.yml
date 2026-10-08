@@ -3,13 +3,48 @@ services:
     build: .
     restart: unless-stopped
     environment:
-      NEXUS_DATABASE_URL: sqlite:////data/nexus_server.db
+      NEXUS_DATABASE_URL: postgresql://nexus:${POSTGRES_PASSWORD}@db:5432/nexus
       NEXUS_JWT_SECRET: ${NEXUS_JWT_SECRET:?set-a-long-random-secret}
+      NEXUS_ACCESS_TOKEN_MINUTES: ${NEXUS_ACCESS_TOKEN_MINUTES:-30}
+      NEXUS_REFRESH_TOKEN_DAYS: ${NEXUS_REFRESH_TOKEN_DAYS:-30}
       NEXUS_CORS_ORIGINS: ${NEXUS_CORS_ORIGINS:-}
-    ports:
-      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    expose:
+      - "8000"
+
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: nexus
+      POSTGRES_USER: nexus
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set-a-postgres-password}
     volumes:
-      - nexus_data:/data
+      - nexus_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nexus -d nexus"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      NEXUS_DOMAIN: ${NEXUS_DOMAIN:?set-your-api-domain}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
 
 volumes:
-  nexus_data:
+  nexus_postgres:
+  caddy_data:
+  caddy_config:
