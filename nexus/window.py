@@ -504,12 +504,20 @@ class MainWindow(QMainWindow):
 
     def refresh_all(self) -> None:
         from datetime import datetime
-        self.date_label.setText(datetime.now().strftime("%A, %d %B"))
+        self.date_label.setText(datetime.now().strftime("%a  ·  %d %b %Y").upper())
         stats = self.db.stats()
         self.metric_labels["tasks_done"].setText(str(stats["tasks_done"]))
         self.metric_labels["xp"].setText(f'{stats["xp"]} XP')
         self.metric_labels["habits_done"].setText(f'{stats["habits_done"]}/{stats["habits_total"]}')
-        self.metric_labels["balance"].setText(f'{stats["balance"]:.2f}')
+        self.metric_labels["balance"].setText(f'{stats["balance"]:.2f} руб.')
+        self.hero_xp_label.setText(f'{stats["xp"]} XP')
+        open_quests = stats["tasks_total"] - stats["tasks_done"]
+        self.hero_quest_copy.setText(f'{open_quests} quest{"s" if open_quests != 1 else ""} left to move forward.')
+        habit_pct = round(stats["habits_done"] / stats["habits_total"] * 100) if stats["habits_total"] else 0
+        self.habits_progress.setValue(habit_pct)
+        self.habits_copy.setText(f'{stats["habits_done"]} of {stats["habits_total"]} habits complete')
+        self.overview_habits.setText("You're building consistency." if stats["habits_total"] else "Add one small habit to begin.")
+        self.focus_minutes_copy.setText(f'{stats["focus_minutes"]} min')
         pending = self.db.get_tasks(include_done=False)
         self.overview_tasks.clear()
         for task in pending[:5]:
