@@ -324,7 +324,7 @@ class MainWindow(QMainWindow):
         self.money_amount = QDoubleSpinBox()
         self.money_amount.setRange(0.01, 100000000)
         self.money_amount.setDecimals(2)
-        self.money_amount.setPrefix("$ ")
+        self.money_amount.setPrefix("руб. ")
         self.money_kind = QComboBox()
         self.money_kind.addItem("Expense", "expense")
         self.money_kind.addItem("Income", "income")
