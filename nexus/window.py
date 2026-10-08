@@ -898,6 +898,12 @@ class MainWindow(QMainWindow):
         pl.setSpacing(10)
         pl.addWidget(heading("Momentum", "Section"))
         pl.addWidget(heading("ALL-TIME QUEST PROGRESS", "Tiny"))
+        self.level_progress = QProgressBar()
+        self.level_progress.setRange(0, 100)
+        pl.addWidget(self.level_progress)
+        self.level_copy = QLabel("Level 1 · 0/500 XP · 0 day streak")
+        self.level_copy.setObjectName("Muted")
+        pl.addWidget(self.level_copy)
         self.daily_progress = QProgressBar()
         self.daily_progress.setRange(0, 100)
         pl.addWidget(self.daily_progress)
@@ -1201,7 +1207,12 @@ class MainWindow(QMainWindow):
         self.metric_labels["xp"].setText(f'{stats["xp"]} XP')
         self.metric_labels["habits_done"].setText(f'{stats["habits_done"]}/{stats["habits_total"]}')
         self.metric_labels["balance"].setText(self._money(stats["balance"]))
-        self.hero_xp_label.setText(f'{stats["xp"]} XP')
+        level = self.db.level_info()
+        streak = self.db.streak_days()
+        self.hero_xp_label.setText(f'LVL {level["level"]}  ·  {stats["xp"]} XP')
+        if hasattr(self, "level_progress"):
+            self.level_progress.setValue(level["percent"])
+            self.level_copy.setText(f'Level {level["level"]} · {level["current"]}/{level["next"]} XP · {streak} day streak')
         open_quests = stats["tasks_total"] - stats["tasks_done"]
         self.hero_quest_copy.setText(f'{open_quests} {self._tr("quests" if open_quests != 1 else "quest")} {self._tr("left to move forward.")}')
         habit_pct = round(stats["habits_done"] / stats["habits_total"] * 100) if stats["habits_total"] else 0
