@@ -23,6 +23,9 @@ The first version is an early foundation with:
 - Simple income and expense tracking
 - Searchable private journal with entry deletion
 - Local SQLite database
+- Local multi-account workspaces with isolated data per account
+- Login/register flow with password hashing and account switching
+- Calendar and personal insights dashboard
 
 ## Stack
 
@@ -86,14 +89,16 @@ The database is stored in your user home directory at `~/.nexus/nexus.db`. Your 
 - [x] Export and database backup
 - [x] Windows executable build pipeline
 - [x] Keyboard shortcuts for navigation and quick actions
-- [ ] Calendar and richer analytics
+- [x] Calendar and richer analytics
 - [ ] Accessibility and responsive-layout pass
+- [ ] Desktop ↔ API sync client
+- [ ] Google OAuth and mobile clients
 
 ## Project principles
 
 - Local-first by default
 - Fast, calm, keyboard-friendly interface
-- No accounts or cloud dependency
++ Local accounts are isolated; no cloud dependency is required
 - Features should work, not just look good
 
 ## License
