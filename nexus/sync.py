@@ -13,6 +13,7 @@ import urllib.error
 import urllib.request
 import urllib.parse
 import uuid
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -71,6 +72,7 @@ class SyncClient:
         self._ensure_meta()
         self.device_id = self._load_device_id()
         self.last_sync_at = self._load_last_sync()
+        self._lock = threading.RLock()
 
     def _ensure_meta(self) -> None:
         with self.database.connect() as db:
@@ -406,6 +408,10 @@ class SyncClient:
         return {"applied": applied, "server_time": server_time}
 
     def sync(self) -> dict[str, Any]:
+        if not self.token:
+            raise SyncError("Cloud account is not connected.")
+        if not self._lock.acquire(blocking=False):
+            raise SyncError("A cloud sync is already running.")
         started_at = _now()
         try:
             pulled = self.pull()
@@ -418,3 +424,5 @@ class SyncClient:
             conflicts = len(self.list_conflicts())
             self._record_history(started_at, "error", conflicts=conflicts, error=str(error))
             raise
+        finally:
+            self._lock.release()
