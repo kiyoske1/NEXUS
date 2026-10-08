@@ -19,8 +19,10 @@ CREATE TABLE IF NOT EXISTS users(
 CREATE TABLE IF NOT EXISTS sessions(
     token TEXT PRIMARY KEY,
     user_id INTEGER NOT NULL,
+    device_id TEXT,
     expires_at TEXT NOT NULL,
-    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY(device_id) REFERENCES devices(id) ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS devices(
     id TEXT PRIMARY KEY,
@@ -66,6 +68,7 @@ POSTGRES_STATEMENTS = [
     """CREATE TABLE IF NOT EXISTS sessions(
         token TEXT PRIMARY KEY,
         user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        device_id TEXT REFERENCES devices(id) ON DELETE CASCADE,
         expires_at TEXT NOT NULL
     )""",
     """CREATE TABLE IF NOT EXISTS devices(
