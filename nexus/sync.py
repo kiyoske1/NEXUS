@@ -96,9 +96,6 @@ class SyncClient:
                     return self._request(method, path, payload)
                 except Exception as refresh_error:
                     self.token = ""
-                self.refresh_token = ""
-                if self.token_saver:
-                    self.token_saver("", "")
                     self.refresh_token = ""
                     if self.token_saver:
                         self.token_saver("", "")
@@ -108,6 +105,7 @@ class SyncClient:
             except Exception:
                 detail = error.reason
             raise SyncError(f"API {error.code}: {detail}") from error
+
         except (urllib.error.URLError, TimeoutError) as error:
             raise SyncError(f"Cannot reach NEXUS API: {error}") from error
 
