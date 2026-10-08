@@ -86,3 +86,25 @@ def test_journal_entry_can_be_deleted(db):
     assert any(entry["id"] == entry_id for entry in db.get_journal_entries())
     db.delete_journal_entry(entry_id)
     assert all(entry["id"] != entry_id for entry in db.get_journal_entries())
+
+
+def test_records_can_be_edited(db):
+    task = db.add_task("Old task", "Work", 20)
+    db.update_task(task, "New task", "Learning", 50)
+    assert db.get_tasks()[0]["title"] == "New task"
+    habit = db.add_habit("Old habit")
+    db.update_habit(habit, "New habit")
+    assert db.get_habits()[0]["title"] == "New habit"
+    tx = db.add_transaction("Old", 10, "expense")
+    db.update_transaction(tx, "New", 25, "income")
+    assert db.get_transactions()[0]["amount"] == 25
+    entry = db.add_journal_entry("Old", "Text")
+    db.update_journal_entry(entry, "New", "Updated")
+    assert db.get_journal_entries()[0]["body"] == "Updated"
+
+
+def test_profile_is_saved_and_password_is_verified(db):
+    db.save_profile("Vova", "vova@example.com", "vova", "secret")
+    assert db.get_profile()["username"] == "vova"
+    assert db.verify_profile_password("secret") is True
+    assert db.verify_profile_password("wrong") is False
