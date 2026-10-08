@@ -98,6 +98,11 @@ class MainWindow(QMainWindow):
         self._timer = QTimer(self)
         self._timer.setInterval(1000)
         self._timer.timeout.connect(self._tick)
+        self._cloud_sync_running = False
+        self._cloud_timer = QTimer(self)
+        self._cloud_timer.setInterval(5 * 60 * 1000)
+        self._cloud_timer.timeout.connect(self._background_cloud_sync)
+        self._cloud_timer.start()
         self._build_shell()
         self._apply_theme()
         self._show_auth_gate_if_needed()
@@ -713,6 +718,9 @@ class MainWindow(QMainWindow):
         self.last_sync_label = QLabel("Last sync: never")
         self.last_sync_label.setObjectName("Tiny")
         sync_box.addWidget(self.last_sync_label)
+        self.background_sync_label = QLabel("↻  Background sync: every 5 minutes")
+        self.background_sync_label.setObjectName("Tiny")
+        sync_box.addWidget(self.background_sync_label)
         sync_row = QHBoxLayout()
         cloud_connect = QPushButton("☁  Connect cloud account")
         cloud_connect.clicked.connect(self._connect_cloud)
@@ -890,6 +898,23 @@ class MainWindow(QMainWindow):
             self._message(f"Cloud account created for @{user['username']}.")
         except SyncError as error:
             self._message(str(error))
+
+    def _background_cloud_sync(self) -> None:
+        if not self.sync_client.token or self._cloud_sync_running:
+            return
+        self._cloud_sync_running = True
+        try:
+            result = self.sync_client.sync()
+            self.last_sync_label.setText(
+                f"Last sync: {self.sync_client.last_sync_at or 'just now'}  ·  "
+                f"↑ {result['pushed']}  ↓ {result['pulled']}"
+            )
+            self.background_sync_label.setText("✓  Background sync: synced just now")
+            self.refresh_all()
+        except SyncError:
+            self.background_sync_label.setText("○  Background sync: offline, will retry")
+        finally:
+            self._cloud_sync_running = False
 
     def _cloud_sync(self) -> None:
         self._sync_endpoint()
