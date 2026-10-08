@@ -28,6 +28,16 @@ CREATE TABLE IF NOT EXISTS sync_meta (
     synced_at TEXT NOT NULL,
     PRIMARY KEY(entity, client_id)
 );
+CREATE TABLE IF NOT EXISTS sync_conflicts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    entity TEXT NOT NULL,
+    client_id TEXT NOT NULL,
+    local_payload TEXT NOT NULL,
+    remote_payload TEXT NOT NULL,
+    remote_updated_at TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    UNIQUE(entity, client_id)
+);
 """
 
 
@@ -187,11 +197,43 @@ class SyncClient:
         raw = json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
+    def list_conflicts(self) -> list[dict[str, Any]]:
+        with self.database.connect() as db:
+            rows = db.execute("SELECT id, entity, client_id, local_payload, remote_payload, remote_updated_at, created_at FROM sync_conflicts ORDER BY created_at DESC").fetchall()
+        return [{**dict(row), "local_payload": json.loads(row["local_payload"]), "remote_payload": json.loads(row["remote_payload"])} for row in rows]
+
+    def resolve_conflict(self, conflict_id: int, choice: str) -> None:
+        if choice not in {"local", "remote"}:
+            raise SyncError("Conflict choice must be local or remote.")
+        with self.database.connect() as db:
+            row = db.execute("SELECT * FROM sync_conflicts WHERE id=?", (int(conflict_id),)).fetchone()
+        if not row:
+            raise SyncError("Conflict no longer exists.")
+        payload = json.loads(row["local_payload"] if choice == "local" else row["remote_payload"])
+        entity, client_id = row["entity"], row["client_id"]
+        if choice == "remote":
+            if payload:
+                self._upsert_remote(entity, client_id, payload)
+            else:
+                self._delete_remote(entity, client_id)
+        else:
+            with self.database.connect() as db:
+                meta = db.execute("SELECT local_id FROM sync_meta WHERE entity=? AND client_id=?", (entity, client_id)).fetchone()
+                if meta:
+                    db.execute("UPDATE sync_meta SET payload_hash=?, synced_at=? WHERE entity=? AND client_id=?", (self._hash(payload), _now(), entity, client_id))
+                    db.commit()
+        with self.database.connect() as db:
+            db.execute("DELETE FROM sync_conflicts WHERE id=?", (int(conflict_id),))
+            db.commit()
+
     def _changed_records(self) -> list[dict[str, Any]]:
         current = self._records()
         with self.database.connect() as db:
             changed = []
+            conflicts = {(row["entity"], row["client_id"]) for row in db.execute("SELECT entity, client_id FROM sync_conflicts").fetchall()}
             for record in current:
+                if (record["entity"], record["client_id"]) in conflicts:
+                    continue
                 digest = self._hash(record["payload"])
                 old = db.execute(
                     "SELECT payload_hash FROM sync_meta WHERE entity=? AND client_id=?",
@@ -303,10 +345,29 @@ class SyncClient:
         order = {"habits": 0, "tasks": 1, "transactions": 2, "journal_entries": 3, "focus_sessions": 4, "habit_logs": 5}
         records.sort(key=lambda record: order.get(record.get("entity"), 99))
         for record in records:
+            entity, client_id = record["entity"], record["client_id"]
+            with self.database.connect() as db:
+                meta = db.execute("SELECT local_id, payload_hash FROM sync_meta WHERE entity=? AND client_id=?", (entity, client_id)).fetchone()
+                local_payload = None
+                if meta and entity in TABLES:
+                    local_row = db.execute(f"SELECT * FROM {entity} WHERE id=?", (int(meta["local_id"]),)).fetchone()
+                    local_payload = dict(local_row) if local_row else None
+            incoming_payload = record.get("payload", {})
+            local_changed = meta is not None and local_payload is not None and self._hash(local_payload) != meta["payload_hash"]
+            if local_changed:
+                with self.database.connect() as db:
+                    db.execute("""INSERT INTO sync_conflicts(entity,client_id,local_payload,remote_payload,remote_updated_at,created_at)
+                                 VALUES(?,?,?,?,?,?) ON CONFLICT(entity,client_id) DO UPDATE SET
+                                 local_payload=excluded.local_payload, remote_payload=excluded.remote_payload,
+                                 remote_updated_at=excluded.remote_updated_at""",
+                               (entity, client_id, json.dumps(local_payload, ensure_ascii=False),
+                                json.dumps(incoming_payload, ensure_ascii=False), record.get("updated_at", ""), _now()))
+                    db.commit()
+                continue
             if record.get("deleted"):
-                self._delete_remote(record["entity"], record["client_id"])
+                self._delete_remote(entity, client_id)
             else:
-                self._upsert_remote(record["entity"], record["client_id"], record.get("payload", {}))
+                self._upsert_remote(entity, client_id, incoming_payload)
             applied += 1
         server_time = result.get("server_time", "")
         if server_time:
