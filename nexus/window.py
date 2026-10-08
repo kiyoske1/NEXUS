@@ -274,7 +274,7 @@ class MainWindow(QMainWindow):
             "Timer reset.":"Таймер сброшен.","Session complete. Nice work.":"Сессия завершена. Хорошая работа.","Focus mode active. Keep going.":"Фокус включён. Продолжай.",
             "Paused. Resume when ready.":"Пауза. Продолжи, когда будешь готов.","Ready when you are.":"Готов, когда готов ты."
         };
-        const ro = {
+        ro = {
             "WORKSPACE":"SPAȚIU DE LUCRU","YOUR SYSTEM":"SISTEMUL TĂU","A little progress, every day.":"Puțin progres, în fiecare zi.",
             "Backup":"Backup","Export":"Export","Create a new quest":"Creează o sarcină","Your quest board":"Panoul tău",
             "All quests":"Toate sarcinile","Open only":"Doar deschise","Completed":"Finalizate","＋  Add quest":"＋  Adaugă sarcină",
@@ -294,7 +294,11 @@ class MainWindow(QMainWindow):
             "Timer reset.":"Cronometrul a fost resetat.","Session complete. Nice work.":"Sesiunea s-a încheiat. Bravo.","Focus mode active. Keep going.":"Modul focus este activ. Continuă.",
             "Paused. Resume when ready.":"Pauză. Reia când ești gata.","Ready when you are.":"Gata când ești."
         };
-        return self.language == "Русский" ? (ru[text] || text) : self.language == "Română" ? (ro[text] || text) : text;
+        if self.language == "Русский":
+            return ru.get(text, text)
+        if self.language == "Română":
+            return ro.get(text, text)
+        return text
 
     def _translate_tree(self) -> None:
         from PySide6.QtWidgets import QApplication
