@@ -21,5 +21,11 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+      - name: Compile application
+        run: python -m compileall -q main.py nexus tests
+      - name: Smoke-test desktop UI
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -c "from PySide6.QtWidgets import QApplication; from nexus.window import MainWindow; app = QApplication([]); window = MainWindow(); window.close(); print('NEXUS UI smoke test passed')"
       - name: Run tests
         run: python -m pytest -q
