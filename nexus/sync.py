@@ -40,16 +40,32 @@ class SyncError(RuntimeError):
 
 
 class SyncClient:
-    def __init__(self, database, api_url: str | None = None, token: str | None = None) -> None:
+    def __init__(self, database, api_url: str | None = None, token: str | None = None, refresh_token: str | None = None, token_saver=None) -> None:
         self.database = database
         self.api_url = (api_url or os.getenv("NEXUS_API_URL", "http://127.0.0.1:8000")).rstrip("/")
         self.token = token or ""
+        self.refresh_token = refresh_token or ""
+        self.token_saver = token_saver
         self._ensure_meta()
         self.device_id = self._load_device_id()
+        self.last_sync_at = self._load_last_sync()
 
     def _ensure_meta(self) -> None:
         with self.database.connect() as db:
             db.executescript(SYNC_META)
+
+    def _load_last_sync(self) -> str:
+        with self.database.connect() as db:
+            db.execute("CREATE TABLE IF NOT EXISTS sync_state (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+            row = db.execute("SELECT value FROM sync_state WHERE key=?", ("last_sync_at",)).fetchone()
+            return str(row["value"]) if row else ""
+
+    def _save_last_sync(self, value: str) -> None:
+        with self.database.connect() as db:
+            db.execute("CREATE TABLE IF NOT EXISTS sync_state (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+            db.execute("INSERT INTO sync_state(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", ("last_sync_at", value))
+            db.commit()
+        self.last_sync_at = value
 
     def _load_device_id(self) -> str:
         path = self.database.path.parent / "device_id"
@@ -73,6 +89,20 @@ class SyncClient:
             with urllib.request.urlopen(request, timeout=15) as response:
                 return json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as error:
+            if error.code == 401 and path != "/auth/refresh" and self.refresh_token:
+                try:
+                    refreshed = self._request_raw_refresh()
+                    self._set_tokens(refreshed)
+                    return self._request(method, path, payload)
+                except Exception as refresh_error:
+                    self.token = ""
+                self.refresh_token = ""
+                if self.token_saver:
+                    self.token_saver("", "")
+                    self.refresh_token = ""
+                    if self.token_saver:
+                        self.token_saver("", "")
+                    raise SyncError("Cloud session expired. Please sign in again.") from refresh_error
             try:
                 detail = json.loads(error.read().decode("utf-8")).get("detail", error.reason)
             except Exception:
@@ -81,16 +111,34 @@ class SyncClient:
         except (urllib.error.URLError, TimeoutError) as error:
             raise SyncError(f"Cannot reach NEXUS API: {error}") from error
 
+    def _request_raw_refresh(self) -> dict[str, Any]:
+        body = json.dumps({"refresh_token": self.refresh_token, "device_id": self.device_id}).encode("utf-8")
+        request = urllib.request.Request(
+            f"{self.api_url}/auth/refresh", data=body,
+            headers={"Accept": "application/json", "Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(request, timeout=15) as response:
+            return json.loads(response.read().decode("utf-8"))
+
+    def _set_tokens(self, result: dict[str, Any]) -> None:
+        self.token = result.get("access_token", "")
+        self.refresh_token = result.get("refresh_token", self.refresh_token)
+        if result.get("device_id"):
+            self.device_id = result["device_id"]
+        if self.token_saver:
+            self.token_saver(self.token, self.refresh_token)
+
     def register(self, name: str, email: str, username: str, password: str) -> dict[str, Any]:
         result = self._request("POST", "/auth/register", {
-            "name": name, "email": email, "username": username, "password": password,
+            "name": name, "email": email, "username": username, "password": password, "device_id": self.device_id, "device_name": "NEXUS desktop",
         })
-        self.token = result["access_token"]
+        self._set_tokens(result)
         return result["user"]
 
     def login(self, username_or_email: str, password: str) -> dict[str, Any]:
         result = self._request("POST", "/auth/login", {
-            "username_or_email": username_or_email, "password": password,
+            "username_or_email": username_or_email, "password": password, "device_id": self.device_id, "device_name": "NEXUS desktop",
         })
         self.token = result["access_token"]
         return result["user"]
@@ -239,6 +287,7 @@ class SyncClient:
     def pull(self, since: str | None = None) -> dict[str, Any]:
         if not self.token:
             raise SyncError("Cloud account is not connected.")
+        since = since or self.last_sync_at
         query = "" if not since else f"?since={urllib.parse.quote(since)}"
         result = self._request("GET", f"/sync/pull{query}")
         applied = 0
@@ -251,7 +300,10 @@ class SyncClient:
             else:
                 self._upsert_remote(record["entity"], record["client_id"], record.get("payload", {}))
             applied += 1
-        return {"applied": applied, "server_time": result.get("server_time", "")}
+        server_time = result.get("server_time", "")
+        if server_time:
+            self._save_last_sync(server_time)
+        return {"applied": applied, "server_time": server_time}
 
     def sync(self) -> dict[str, Any]:
         pulled = self.pull()
