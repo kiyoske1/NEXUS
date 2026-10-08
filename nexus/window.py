@@ -954,7 +954,10 @@ class MainWindow(QMainWindow):
 
     def _delete_transaction(self) -> None:
         tx_id = self._selected_id(self.money_list)
-        if tx_id is not None:
+        if tx_id is None:
+            return
+        answer = QMessageBox.question(self, self._tr("Delete transaction"), self._tr("Delete this transaction permanently?"), QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
+        if answer == QMessageBox.StandardButton.Yes:
             self.db.delete_transaction(tx_id)
             self.refresh_all()
 
@@ -996,7 +999,10 @@ class MainWindow(QMainWindow):
 
     def _delete_task(self) -> None:
         task_id = self._selected_id(self.task_list)
-        if task_id is not None:
+        if task_id is None:
+            return
+        answer = QMessageBox.question(self, self._tr("Delete quest"), self._tr("Delete this quest permanently?"), QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
+        if answer == QMessageBox.StandardButton.Yes:
             self.db.delete_task(task_id)
             self.refresh_all()
 
@@ -1022,7 +1028,10 @@ class MainWindow(QMainWindow):
 
     def _delete_habit(self) -> None:
         habit_id = self._selected_id(self.habit_list)
-        if habit_id is not None:
+        if habit_id is None:
+            return
+        answer = QMessageBox.question(self, self._tr("Delete habit"), self._tr("Delete this habit and its streak history?"), QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
+        if answer == QMessageBox.StandardButton.Yes:
             self.db.delete_habit(habit_id)
             self.refresh_all()
 
