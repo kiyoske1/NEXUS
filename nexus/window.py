@@ -240,10 +240,13 @@ class MainWindow(QMainWindow):
         login = QPushButton("→  Sign in"); login.setObjectName("Primary"); login.setMinimumHeight(48); login.clicked.connect(self._show_login_screen)
         register = QPushButton("+  Create account"); register.setMinimumHeight(48); register.clicked.connect(self._show_register_screen)
         box.addWidget(login); box.addWidget(register)
-        profile = self.db.get_profile()
-        if profile and profile.get("password_hash"):
-            note = QLabel(f"Local account detected · @{profile.get('username', '')}"); note.setObjectName("Muted"); box.addWidget(note)
-        note = QLabel("Accounts are stored locally on this PC. Your workspace data remains on this device."); note.setObjectName("Muted"); note.setWordWrap(True); box.addWidget(note)
+        accounts = self.db.list_accounts()
+        if accounts:
+            names = ", ".join(f"@{account['username']}" for account in accounts[:3])
+            if len(accounts) > 3:
+                names += f" +{len(accounts) - 3}"
+            note = QLabel(f"Local accounts on this PC · {names}"); note.setObjectName("Muted"); box.addWidget(note)
+        note = QLabel("Each account has its own quests, habits, focus history, finances, journal, and profile."); note.setObjectName("Muted"); note.setWordWrap(True); box.addWidget(note)
         self.setCentralWidget(root)
 
     def _show_register_screen(self) -> None:
@@ -296,7 +299,7 @@ class MainWindow(QMainWindow):
             return
 
         try:
-            self.db.save_profile(name, email, username, password)
+            self.db.create_account(name, email, username, password)
         except Exception as error:
             self.auth_status.setText(f"Could not create account: {error}")
             return
@@ -309,7 +312,7 @@ class MainWindow(QMainWindow):
             self.auth_status.setText("Enter your password.")
             self.auth_password.setFocus()
             return
-        if self.db.verify_profile_password(password):
+        if self.db.authenticate_account(self.auth_username.text(), password):
             self._unlock_workspace()
         else:
             self.auth_status.setText("Incorrect password.")
@@ -605,7 +608,7 @@ class MainWindow(QMainWindow):
         account_box = QVBoxLayout(account_card)
         account_box.setContentsMargins(18, 16, 18, 16)
         account_box.addWidget(heading("Account", "Section"))
-        account_box.addWidget(QLabel("Return to the account chooser. Your local workspace data stays on this PC."))
+        account_box.addWidget(QLabel("Switch without mixing workspaces. Every account keeps its own data on this PC."))
         switch_account = QPushButton("⇄  Switch account")
         switch_account.setMinimumHeight(42)
         switch_account.clicked.connect(self._switch_account)
