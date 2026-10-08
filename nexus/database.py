@@ -189,6 +189,37 @@ class Database:
             self.path = old_path
             raise
 
+    def switch_to_account(self, account_id: int) -> bool:
+        with self._connect_accounts() as accounts:
+            row = accounts.execute("SELECT db_path FROM accounts WHERE id = ?", (int(account_id),)).fetchone()
+        if not row:
+            return False
+        candidate = Path(row["db_path"])
+        if not candidate.exists():
+            return False
+        self.path = candidate
+        return True
+
+    def delete_account(self, account_id: int, password: str) -> None:
+        with self._connect_accounts() as accounts:
+            row = accounts.execute("SELECT * FROM accounts WHERE id = ?", (int(account_id),)).fetchone()
+        if not row:
+            raise ValueError("Account not found.")
+        candidate = Path(row["db_path"])
+        if not candidate.exists():
+            raise ValueError("Account workspace is missing.")
+        old_path = self.path
+        self.path = candidate
+        try:
+            if not self.verify_profile_password(password):
+                raise ValueError("Incorrect password.")
+        finally:
+            self.path = old_path
+        with self._connect_accounts() as accounts:
+            accounts.execute("DELETE FROM accounts WHERE id = ?", (int(account_id),))
+        if candidate != old_path and candidate.exists():
+            candidate.unlink()
+
     def current_account(self) -> dict[str, Any] | None:
         return self.get_profile()
 
