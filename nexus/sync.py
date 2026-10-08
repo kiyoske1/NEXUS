@@ -92,11 +92,23 @@ class SyncClient:
         self.last_sync_at = value
 
     def _load_device_id(self) -> str:
-        path = self.database.path.parent / "device_id"
+        # Device identity belongs to the local workspace, not the parent folder.
+        # Multiple NEXUS accounts share ~/.nexus, so a single parent-level ID would
+        # incorrectly merge their cloud devices.
+        path = self.database.path.with_name(self.database.path.name + ".device_id")
         if path.exists():
             value = path.read_text(encoding="utf-8").strip()
             if value:
                 return value
+
+        # Preserve the legacy device identity for the original root workspace.
+        legacy = self.database.path.parent / "device_id"
+        if self.database.path.name == "nexus.db" and legacy.exists():
+            value = legacy.read_text(encoding="utf-8").strip()
+            if value:
+                path.write_text(value, encoding="utf-8")
+                return value
+
         value = str(uuid.uuid4())
         path.write_text(value, encoding="utf-8")
         return value
