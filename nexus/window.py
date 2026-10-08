@@ -1,7 +1,7 @@
 """Main NEXUS desktop interface."""
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, QSettings
 from PySide6.QtGui import QFont, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QLabel, QPushButton,
@@ -81,6 +81,10 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(980, 680)
         self.setStyleSheet(STYLES)
         self.setWindowOpacity(1.0)
+        self.settings = QSettings("NEXUS", "PersonalCommandCenter")
+        self.currency = self.settings.value("currency", "RUB")
+        self.language = self.settings.value("language", "English")
+        self.theme = self.settings.value("theme", "NEXUS Lime")
         self._focus_total_seconds = 25 * 60
         self._focus_seconds = self._focus_total_seconds
         self._focus_running = False
@@ -88,6 +92,9 @@ class MainWindow(QMainWindow):
         self._timer.setInterval(1000)
         self._timer.timeout.connect(self._tick)
         self._build_shell()
+        self._apply_theme()
+        self._apply_language()
+        self._apply_currency()
         self.refresh_all()
 
     def _build_shell(self) -> None:
@@ -120,8 +127,8 @@ class MainWindow(QMainWindow):
         self.nav = QButtonGroup(self)
         self.nav.setExclusive(True)
         self.pages = QStackedWidget()
-        self.page_names = ["Overview", "Quests", "Habits", "Focus", "Finance", "Journal"]
-        symbols = ["⌂", "◇", "✳", "◷", "↗", "▤"]
+        self.page_names = ["Overview", "Quests", "Habits", "Focus", "Finance", "Journal", "Settings"]
+        symbols = ["⌂", "◇", "✳", "◷", "↗", "▤", "⚙"]
         for index, name in enumerate(self.page_names):
             button = QPushButton(f"{symbols[index]}     {name}")
             button.setObjectName("Nav")
@@ -192,6 +199,7 @@ class MainWindow(QMainWindow):
         self.pages.addWidget(self._focus_page())
         self.pages.addWidget(self._finance_page())
         self.pages.addWidget(self._journal_page())
+        self.pages.addWidget(self._settings_page())
         content_layout.addWidget(self.pages, 1)
         outer.addWidget(content, 1)
         self.setCentralWidget(root)
@@ -207,6 +215,117 @@ class MainWindow(QMainWindow):
         backup_shortcut = QShortcut(QKeySequence("Ctrl+Shift+B"), self)
         backup_shortcut.activated.connect(self._backup_database)
         self._shortcuts.append(backup_shortcut)
+
+
+    def _currency_prefix(self) -> str:
+        return {"RUB": "₽ ", "PMR": "р. ", "USD": "$ ", "EUR": "€ ", "USDT": "₮ "}.get(self.currency, "₽ ")
+
+    def _money(self, value: float) -> str:
+        return f"{self._currency_prefix()}{value:,.2f}"
+
+    def _apply_currency(self) -> None:
+        if hasattr(self, "money_amount"):
+            self.money_amount.setPrefix(self._currency_prefix())
+        if hasattr(self, "metric_labels") and "balance" in self.metric_labels:
+            self.metric_labels["balance"].setText(self._money(self.db.stats()["balance"]))
+        if hasattr(self, "money_list"):
+            self.money_list.clear()
+            for item in self.db.get_transactions():
+                sign = "+" if item["kind"] == "income" else "−"
+                self.money_list.addItem(f"{sign} {self._money(item['amount'])}   ·   {item['title']}   ·   {item['created_at'][:10]}")
+
+    def _apply_theme(self) -> None:
+        themes = {
+            "NEXUS Lime": ("#0d0e12", "#15161e", "#171722", "#c7f36b", "#aaa1d7", "#101117"),
+            "Violet Night": ("#0d0b14", "#171321", "#1d1729", "#c6a7ff", "#9d8bd7", "#120f19"),
+            "Ice Blue": ("#0b1015", "#121b22", "#16232c", "#8de7ff", "#9cb8d9", "#0e151b"),
+            "Mono": ("#0d0d0d", "#171717", "#1c1c1c", "#f0f0f0", "#a0a0a0", "#111111"),
+        }
+        bg, card, hero, accent, lavender, sidebar = themes.get(self.theme, themes["NEXUS Lime"])
+        self.setStyleSheet(STYLES.replace("#0d0e12", bg).replace("#15161e", card).replace("#171722", hero).replace("#c7f36b", accent).replace("#aaa1d7", lavender).replace("#101117", sidebar))
+
+    def _apply_language(self) -> None:
+        translations = {
+            "English": ["Overview", "Quests", "Habits", "Focus", "Finance", "Journal", "Settings"],
+            "Русский": ["Обзор", "Задачи", "Привычки", "Фокус", "Финансы", "Дневник", "Настройки"],
+            "Română": ["Panou", "Sarcini", "Obiceiuri", "Focus", "Finanțe", "Jurnal", "Setări"],
+        }
+        names = translations.get(self.language, translations["English"])
+        symbols = ["⌂", "◇", "✳", "◷", "↗", "▤", "⚙"]
+        for i in range(len(self.page_names)):
+            button = self.nav.button(i)
+            if button:
+                button.setText(f"{symbols[i]}     {names[i]}")
+        self.page_title.setText(names[self.pages.currentIndex()])
+        if hasattr(self, "language_note"):
+            self.language_note.setText({"English": "Interface language", "Русский": "Язык интерфейса", "Română": "Limba interfeței"}[self.language])
+
+    def _settings_page(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(13)
+        card = panel()
+        box = QVBoxLayout(card)
+        box.setContentsMargins(22, 20, 22, 20)
+        box.setSpacing(16)
+        box.addWidget(heading("Personalize NEXUS", "Hero"))
+        box.addWidget(QLabel("Change the atmosphere, language, and money format. Your choices are saved locally."))
+
+        theme_row = QHBoxLayout()
+        theme_row.addWidget(QLabel("Appearance"))
+        theme_row.addStretch(1)
+        self.theme_combo = QComboBox()
+        self.theme_combo.addItems(["NEXUS Lime", "Violet Night", "Ice Blue", "Mono"])
+        self.theme_combo.setCurrentText(self.theme)
+        self.theme_combo.currentTextChanged.connect(self._change_theme)
+        theme_row.addWidget(self.theme_combo)
+        box.addLayout(theme_row)
+
+        lang_row = QHBoxLayout()
+        self.language_note = QLabel("Interface language")
+        lang_row.addWidget(self.language_note)
+        lang_row.addStretch(1)
+        self.language_combo = QComboBox()
+        self.language_combo.addItems(["English", "Русский", "Română"])
+        self.language_combo.setCurrentText(self.language)
+        self.language_combo.currentTextChanged.connect(self._change_language)
+        lang_row.addWidget(self.language_combo)
+        box.addLayout(lang_row)
+
+        money_row = QHBoxLayout()
+        money_row.addWidget(QLabel("Currency"))
+        money_row.addStretch(1)
+        self.currency_combo = QComboBox()
+        self.currency_combo.addItems(["RUB", "PMR", "USD", "EUR", "USDT"])
+        self.currency_combo.setCurrentText(self.currency)
+        self.currency_combo.currentTextChanged.connect(self._change_currency)
+        money_row.addWidget(self.currency_combo)
+        box.addLayout(money_row)
+
+        box.addSpacing(8)
+        box.addWidget(heading("NEXUS // LOCAL CONFIG", "Tiny"))
+        box.addWidget(QLabel("No account required. Preferences are stored with your desktop app settings."))
+        box.addStretch(1)
+        layout.addWidget(card)
+        layout.addStretch(1)
+        return page
+
+    def _change_theme(self, theme: str) -> None:
+        self.theme = theme
+        self.settings.setValue("theme", theme)
+        self._apply_theme()
+
+    def _change_language(self, language: str) -> None:
+        self.language = language
+        self.settings.setValue("language", language)
+        self._apply_language()
+
+    def _change_currency(self, currency: str) -> None:
+        self.currency = currency
+        self.settings.setValue("currency", currency)
+        self._apply_currency()
+        self.refresh_all()
 
     def _navigate(self, index: int) -> None:
         self.pages.setCurrentIndex(index)
@@ -523,7 +642,7 @@ class MainWindow(QMainWindow):
         self.money_amount = QDoubleSpinBox()
         self.money_amount.setRange(0.01, 100000000)
         self.money_amount.setDecimals(2)
-        self.money_amount.setPrefix("руб. ")
+        self.money_amount.setPrefix(self._currency_prefix())
         self.money_kind = QComboBox()
         self.money_kind.addItem("Expense", "expense")
         self.money_kind.addItem("Income", "income")
@@ -595,7 +714,7 @@ class MainWindow(QMainWindow):
         self.metric_labels["tasks_done"].setText(str(stats["tasks_done"]))
         self.metric_labels["xp"].setText(f'{stats["xp"]} XP')
         self.metric_labels["habits_done"].setText(f'{stats["habits_done"]}/{stats["habits_total"]}')
-        self.metric_labels["balance"].setText(f'{stats["balance"]:.2f} руб.')
+        self.metric_labels["balance"].setText(self._money(stats["balance"]))
         self.hero_xp_label.setText(f'{stats["xp"]} XP')
         open_quests = stats["tasks_total"] - stats["tasks_done"]
         self.hero_quest_copy.setText(f'{open_quests} quest{"s" if open_quests != 1 else ""} left to move forward.')
@@ -628,7 +747,7 @@ class MainWindow(QMainWindow):
             self.money_list.clear()
             for item in self.db.get_transactions():
                 sign = "+" if item["kind"] == "income" else "−"
-                self.money_list.addItem(f'{sign} {item["amount"]:.2f}   ·   {item["title"]}   ·   {item["created_at"][:10]}')
+                self.money_list.addItem(f'{sign} {self._money(item["amount"])}   ·   {item["title"]}   ·   {item["created_at"][:10]}')
         if hasattr(self, "journal_list"):
             self._filter_journal_entries()
 
