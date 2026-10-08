@@ -174,11 +174,11 @@ class Database:
                 FROM tasks
                 WHERE done = 1 AND DATE(completed_at) >= DATE(?, '-6 days')
                 GROUP BY DATE(completed_at)
-            """, (today,)).fetchall()
+            """, (today,)).fetchall()\n            xp = db.execute("SELECT COALESCE(SUM(CASE WHEN done = 1 THEN xp ELSE 0 END), 0) FROM tasks").fetchone()[0]
         weekly_map = {row["day"]: row["count"] for row in weekly}
         week_done = sum(weekly_map.values())
         return {
-            "open_tasks": open_tasks,
+            "open_tasks": open_tasks,\n            "xp": int(xp),
             "done_today": done_today,
             "focus_today": focus_today,
             "habit_done_today": habit_done_today,
