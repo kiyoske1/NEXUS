@@ -894,14 +894,27 @@ class MainWindow(QMainWindow):
         device_id = device.get("id")
         if not device_id:
             return
-        if device_id == self.sync_client.device_id:
-            QMessageBox.information(self, "Device", "This is the current device. Use Sign out all devices for a full reset.")
-            return
-        name, ok = QInputDialog.getText(
-            self, "Rename device", "Device name:",
-            text=device.get("name", "NEXUS device"),
+        current = device_id == self.sync_client.device_id
+        actions = ["Rename device"]
+        if not current:
+            actions.append("Revoke access")
+        action, ok = QInputDialog.getItem(
+            self,
+            "NEXUS · Device",
+            device.get("name", "NEXUS device") + "\n" + self._device_status(device.get("last_seen_at", "")),
+            actions,
+            0,
+            False,
         )
-        if ok:
+        if not ok:
+            return
+        if action == "Rename device":
+            name, ok = QInputDialog.getText(
+                self, "Rename device", "Device name:",
+                text=device.get("name", "NEXUS device"),
+            )
+            if not ok:
+                return
             name = name.strip()
             if not name:
                 QMessageBox.warning(self, "Device", "Device name cannot be empty.")
@@ -914,23 +927,22 @@ class MainWindow(QMainWindow):
             self._refresh_cloud_devices()
             self._message("Device name updated.")
             return
-
         answer = QMessageBox.question(
             self,
             "Revoke device",
-            f"Revoke access for “{device.get('name', 'NEXUS device')}”?\n\n"
+            "Revoke access for “" + device.get("name", "NEXUS device") + "”?\n\n"
             "Its active sessions and refresh tokens will be invalidated.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         if answer != QMessageBox.StandardButton.Yes:
             return
         try:
-            self.sync_client._request("DELETE", f"/devices/{device_id}")
+            self.sync_client._request("DELETE", "/devices/" + device_id)
         except SyncError as error:
             QMessageBox.warning(self, "Devices", str(error))
             return
         self._refresh_cloud_devices()
-        self._message(f"Device access revoked: {device.get('name', 'NEXUS device')}.")
+        self._message("Device access revoked.")
 
     def _save_cloud_tokens(self, access_token: str, refresh_token: str) -> None:
         if access_token:
