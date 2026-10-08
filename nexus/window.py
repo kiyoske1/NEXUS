@@ -205,7 +205,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(root)
 
         self._shortcuts = []
-        for index in range(len(self.page_names)):
+        for index in range(min(len(self.page_names), 9)):
             shortcut = QShortcut(QKeySequence(f"Ctrl+{index + 1}"), self)
             shortcut.activated.connect(lambda i=index: self._navigate(i))
             self._shortcuts.append(shortcut)
@@ -238,11 +238,66 @@ class MainWindow(QMainWindow):
         themes = {
             "NEXUS Lime": ("#0d0e12", "#15161e", "#171722", "#c7f36b", "#aaa1d7", "#101117"),
             "Violet Night": ("#0d0b14", "#171321", "#1d1729", "#c6a7ff", "#9d8bd7", "#120f19"),
-            "Ice Blue": ("#0b1015", "#121b22", "#16232c", "#8de7ff", "#9cb8d9", "#0e151b"),
+            "Sunset Ember": ("#160d0b", "#241513", "#321a16", "#ff9f68", "#e6b4a0", "#1b0f0c"),
+            "Ocean Neon": ("#071316", "#0e2024", "#122d32", "#55f5dc", "#82b9c5", "#09191c"),
             "Mono": ("#0d0d0d", "#171717", "#1c1c1c", "#f0f0f0", "#a0a0a0", "#111111"),
         }
         bg, card, hero, accent, lavender, sidebar = themes.get(self.theme, themes["NEXUS Lime"])
         self.setStyleSheet(STYLES.replace("#0d0e12", bg).replace("#15161e", card).replace("#171722", hero).replace("#c7f36b", accent).replace("#aaa1d7", lavender).replace("#101117", sidebar))
+
+
+    def _translated_names(self) -> list[str]:
+        return {
+            "English": ["Overview", "Quests", "Habits", "Focus", "Finance", "Journal", "Settings"],
+            "Русский": ["Обзор", "Задачи", "Привычки", "Фокус", "Финансы", "Дневник", "Настройки"],
+            "Română": ["Panou", "Sarcini", "Obiceiuri", "Focus", "Finanțe", "Jurnal", "Setări"],
+        }.get(self.language, ["Overview", "Quests", "Habits", "Focus", "Finance", "Journal", "Settings"])
+
+    def _tr(self, text: str) -> str:
+        ru = {
+            "WORKSPACE":"РАБОЧЕЕ ПРОСТРАНСТВО","YOUR SYSTEM":"ВАША СИСТЕМА","A little progress, every day.":"Небольшой прогресс каждый день.",
+            "Backup":"Резервная копия","Export":"Экспорт","Create a new quest":"Создать новую задачу","Your quest board":"Ваши задачи",
+            "All quests":"Все задачи","Open only":"Только открытые","Completed":"Выполненные","＋  Add quest":"＋  Добавить задачу",
+            "✓  Complete selected  +XP":"✓  Выполнить выбранную  +XP","Delete selected":"Удалить выбранную","Edit selected":"Редактировать выбранное",
+            "Today's check-in":"Сегодня","✓  Toggle today's check-in":"✓  Отметить сегодня","Delete habit":"Удалить привычку",
+            "Protect your attention.":"Береги внимание.","Session length":"Длительность","Start / Pause":"Старт / Пауза","Reset":"Сбросить",
+            "Know where your money goes.":"Знай, куда уходят деньги.","Recent activity":"Последние операции","＋  Add entry":"＋  Добавить операцию",
+            "Expense":"Расход","Income":"Доход","Clear your head.":"Освободи голову.","Recent entries":"Последние записи",
+            "Search titles and thoughts…":"Поиск по заметкам…","Save entry  ↗":"Сохранить запись  ↗","Delete selected entry":"Удалить выбранную запись",
+            "Personalize NEXUS":"Настройка NEXUS","Appearance":"Оформление","Interface language":"Язык интерфейса","Currency":"Валюта",
+            "Edit quest":"Редактировать задачу","Edit habit":"Редактировать привычку","Edit transaction":"Редактировать операцию","Edit note":"Редактировать заметку"
+        };
+        const ro = {
+            "WORKSPACE":"SPAȚIU DE LUCRU","YOUR SYSTEM":"SISTEMUL TĂU","A little progress, every day.":"Puțin progres, în fiecare zi.",
+            "Backup":"Backup","Export":"Export","Create a new quest":"Creează o sarcină","Your quest board":"Panoul tău",
+            "All quests":"Toate sarcinile","Open only":"Doar deschise","Completed":"Finalizate","＋  Add quest":"＋  Adaugă sarcină",
+            "✓  Complete selected  +XP":"✓  Finalizează +XP","Delete selected":"Șterge","Edit selected":"Editează",
+            "Today's check-in":"Astăzi","✓  Toggle today's check-in":"✓  Bifează azi","Delete habit":"Șterge obiceiul",
+            "Protect your attention.":"Protejează-ți atenția.","Session length":"Durata sesiunii","Start / Pause":"Start / Pauză","Reset":"Resetare",
+            "Know where your money goes.":"Știi unde merg banii.","Recent activity":"Activitate recentă","＋  Add entry":"＋  Adaugă operație",
+            "Expense":"Cheltuială","Income":"Venit","Clear your head.":"Eliberează-ți mintea.","Recent entries":"Înregistrări recente",
+            "Search titles and thoughts…":"Caută în notițe…","Save entry  ↗":"Salvează ↗","Delete selected entry":"Șterge înregistrarea",
+            "Personalize NEXUS":"Personalizează NEXUS","Appearance":"Aspect","Interface language":"Limba interfeței","Currency":"Valută",
+            "Edit quest":"Editează sarcina","Edit habit":"Editează obiceiul","Edit transaction":"Editează operația","Edit note":"Editează nota"
+        };
+        return self.language == "Русский" ? (ru[text] || text) : self.language == "Română" ? (ro[text] || text) : text;
+
+    def _translate_tree(self) -> None:
+        from PySide6.QtWidgets import QApplication
+        for widget in QApplication.allWidgets():
+            if isinstance(widget, (QLabel, QPushButton)):
+                original = widget.property("nexus_original_text")
+                if original is None:
+                    original = widget.text()
+                    widget.setProperty("nexus_original_text", original)
+                widget.setText(self._tr(original))
+            elif isinstance(widget, (QLineEdit, QTextEdit)):
+                original = widget.property("nexus_original_placeholder")
+                if original is None:
+                    original = widget.placeholderText()
+                    widget.setProperty("nexus_original_placeholder", original)
+                if original:
+                    widget.setPlaceholderText(self._tr(original))
 
     def _apply_language(self) -> None:
         translations = {
@@ -258,7 +313,8 @@ class MainWindow(QMainWindow):
                 button.setText(f"{symbols[i]}     {names[i]}")
         self.page_title.setText(names[self.pages.currentIndex()])
         if hasattr(self, "language_note"):
-            self.language_note.setText({"English": "Interface language", "Русский": "Язык интерфейса", "Română": "Limba interfeței"}[self.language])
+            self.language_note.setText(self._tr("Interface language"))
+        self._translate_tree()
 
     def _settings_page(self) -> QWidget:
         page = QWidget()
@@ -276,7 +332,7 @@ class MainWindow(QMainWindow):
         theme_row.addWidget(QLabel("Appearance"))
         theme_row.addStretch(1)
         self.theme_combo = QComboBox()
-        self.theme_combo.addItems(["NEXUS Lime", "Violet Night", "Ice Blue", "Mono"])
+        self.theme_combo.addItems(["NEXUS Lime", "Violet Night", "Sunset Ember", "Ocean Neon", "Mono"])
         self.theme_combo.setCurrentText(self.theme)
         self.theme_combo.currentTextChanged.connect(self._change_theme)
         theme_row.addWidget(self.theme_combo)
@@ -329,7 +385,7 @@ class MainWindow(QMainWindow):
 
     def _navigate(self, index: int) -> None:
         self.pages.setCurrentIndex(index)
-        self.page_title.setText(self.page_names[index])
+        self.page_title.setText(self._translated_names()[index])
         button = self.nav.button(index)
         if button and not button.isChecked():
             button.setChecked(True)
@@ -531,6 +587,10 @@ class MainWindow(QMainWindow):
         complete.clicked.connect(self._complete_task)
         delete = QPushButton("Delete selected")
         delete.clicked.connect(self._delete_task)
+
+        edit = QPushButton("Edit selected")
+        edit.clicked.connect(self._edit_task)
+        actions.insertWidget(1, edit)
         actions.addWidget(complete)
         actions.addWidget(delete)
         actions.addStretch(1)
@@ -573,6 +633,10 @@ class MainWindow(QMainWindow):
         check.clicked.connect(self._toggle_habit)
         remove = QPushButton("Delete habit")
         remove.clicked.connect(self._delete_habit)
+
+        edit = QPushButton("Edit selected")
+        edit.clicked.connect(self._edit_habit)
+        actions.insertWidget(1, edit)
         actions.addWidget(check)
         actions.addWidget(remove)
         actions.addStretch(1)
@@ -662,6 +726,15 @@ class MainWindow(QMainWindow):
         ledger_layout.addWidget(heading("Recent activity", "Section"))
         self.money_list = QListWidget()
         ledger_layout.addWidget(self.money_list, 1)
+        finance_actions = QHBoxLayout()
+        edit_finance = QPushButton("Edit selected")
+        edit_finance.clicked.connect(self._edit_transaction)
+        delete_finance = QPushButton("Delete selected")
+        delete_finance.clicked.connect(self._delete_transaction)
+        finance_actions.addWidget(edit_finance)
+        finance_actions.addWidget(delete_finance)
+        finance_actions.addStretch(1)
+        ledger_layout.addLayout(finance_actions)
         layout.addWidget(ledger, 1)
         return page
     def _journal_page(self) -> QWidget:
@@ -705,6 +778,9 @@ class MainWindow(QMainWindow):
         delete_entry = QPushButton("Delete selected entry")
         delete_entry.clicked.connect(self._delete_journal_entry)
         entries_layout.addWidget(delete_entry)
+        edit_entry = QPushButton("Edit selected")
+        edit_entry.clicked.connect(self._edit_journal_entry)
+        entries_layout.addWidget(edit_entry)
         layout.addWidget(entries, 2)
         return page
     def refresh_all(self) -> None:
@@ -779,6 +855,63 @@ class MainWindow(QMainWindow):
             return int(marker[1].strip())
         except ValueError:
             return None
+
+
+    def _edit_task(self) -> None:
+        task_id = self._selected_id(self.task_list)
+        if task_id is None: return
+        task = next((x for x in self.db.get_tasks() if x["id"] == task_id), None)
+        if not task: return
+        title, ok = QInputDialog.getText(self, "Edit quest", "Title:", text=task["title"])
+        if not ok: return
+        xp, ok = QInputDialog.getInt(self, "Edit quest", "XP:", task["xp"], 1, 500)
+        if not ok: return
+        category, ok = QInputDialog.getText(self, "Edit quest", "Category:", text=task["category"])
+        if ok:
+            try: self.db.update_task(task_id, title, category, xp); self.refresh_all()
+            except ValueError as e: self._message(str(e))
+
+    def _edit_habit(self) -> None:
+        habit_id = self._selected_id(self.habit_list)
+        if habit_id is None: return
+        habit = next((x for x in self.db.get_habits() if x["id"] == habit_id), None)
+        if not habit: return
+        title, ok = QInputDialog.getText(self, "Edit habit", "Name:", text=habit["title"])
+        if ok:
+            try: self.db.update_habit(habit_id, title); self.refresh_all()
+            except ValueError as e: self._message(str(e))
+
+    def _edit_transaction(self) -> None:
+        tx_id = self._selected_id(self.money_list)
+        if tx_id is None: return
+        tx = next((x for x in self.db.get_transactions() if x["id"] == tx_id), None)
+        if not tx: return
+        title, ok = QInputDialog.getText(self, "Edit transaction", "Description:", text=tx["title"])
+        if not ok: return
+        amount, ok = QInputDialog.getDouble(self, "Edit transaction", "Amount:", tx["amount"], 0.01, 100000000, 2)
+        if not ok: return
+        kind, ok = QInputDialog.getItem(self, "Edit transaction", "Type:", ["Expense", "Income"], 0 if tx["kind"]=="expense" else 1, False)
+        if ok:
+            try: self.db.update_transaction(tx_id, title, amount, "expense" if kind=="Expense" else "income"); self.refresh_all()
+            except ValueError as e: self._message(str(e))
+
+    def _delete_transaction(self) -> None:
+        tx_id = self._selected_id(self.money_list)
+        if tx_id is not None:
+            self.db.delete_transaction(tx_id)
+            self.refresh_all()
+
+    def _edit_journal_entry(self) -> None:
+        entry_id = self._selected_id(self.journal_list)
+        if entry_id is None: return
+        entry = next((x for x in self.db.get_journal_entries() if x["id"] == entry_id), None)
+        if not entry: return
+        title, ok = QInputDialog.getText(self, "Edit note", "Title:", text=entry["title"])
+        if not ok: return
+        body, ok = QInputDialog.getMultiLineText(self, "Edit note", "Text:", entry["body"])
+        if ok:
+            try: self.db.update_journal_entry(entry_id, title, body); self.refresh_all()
+            except ValueError as e: self._message(str(e))
 
     def _add_task(self) -> None:
         title, ok = QInputDialog.getText(self, "New quest", "What do you want to finish?")
