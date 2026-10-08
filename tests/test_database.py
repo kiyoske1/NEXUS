@@ -79,3 +79,10 @@ def test_habit_streak_survives_until_today_is_missed(db):
     db.toggle_habit(habit_id, yesterday.isoformat())
     assert db.habit_streak(habit_id, date(2026, 2, 11)) == 1
     assert db.habit_streak(habit_id, date(2026, 2, 12)) == 0
+
+
+def test_journal_entry_can_be_deleted(db):
+    entry_id = db.add_journal_entry("Temporary thought", "This should disappear.")
+    assert any(entry["id"] == entry_id for entry in db.get_journal_entries())
+    db.delete_journal_entry(entry_id)
+    assert all(entry["id"] != entry_id for entry in db.get_journal_entries())
