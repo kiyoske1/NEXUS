@@ -31,7 +31,25 @@ def test_auth_and_sync_flow():
     })
     assert response.status_code == 201
     token = response.json()["access_token"]
+    refresh_token = response.json()["refresh_token"]
+    device_id = response.json()["device_id"]
     headers = {"Authorization": f"Bearer {token}"}
+
+    devices = client.get("/devices", headers=headers)
+    assert devices.status_code == 200
+    assert devices.json()[0]["id"] == device_id
+
+    refreshed = client.post("/auth/refresh", json={
+        "refresh_token": refresh_token, "device_id": device_id,
+    })
+    assert refreshed.status_code == 200
+    assert refreshed.json()["access_token"] != token
+    assert refreshed.json()["refresh_token"] != refresh_token
+    stale_refresh = client.post("/auth/refresh", json={
+        "refresh_token": refresh_token, "device_id": device_id,
+    })
+    assert stale_refresh.status_code == 401
+    headers = {"Authorization": f"Bearer {refreshed.json()['access_token']}"}
 
     assert client.get("/me", headers=headers).json()["username"] == "vova"
 
