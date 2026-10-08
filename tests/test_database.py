@@ -138,3 +138,20 @@ def test_legacy_profile_schema_is_migrated(tmp_path):
 
     migrated.save_profile("Vova", "vova@example.com", "vova", "secret")
     assert migrated.verify_profile_password("secret") is True
+
+
+def test_multiple_accounts_have_isolated_workspaces(tmp_path):
+    db = Database(tmp_path / "multi.db")
+    db.create_account("Alice", "alice@example.com", "alice", "secret1")
+    db.add_task("Alice private quest")
+
+    db.create_account("Bob", "bob@example.com", "bob", "secret2")
+    assert db.get_tasks() == []
+    assert len(db.list_accounts()) == 2
+
+    assert db.authenticate_account("alice", "wrong") is False
+    assert db.authenticate_account("alice@example.com", "secret1") is True
+    assert [task["title"] for task in db.get_tasks()] == ["Alice private quest"]
+
+    assert db.authenticate_account("bob", "secret2") is True
+    assert db.get_tasks() == []
