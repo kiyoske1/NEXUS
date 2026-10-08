@@ -695,7 +695,7 @@ class MainWindow(QMainWindow):
             self._focus_running = False
             self.db.add_focus_session(max(1, self._focus_total_seconds // 60))
             self.focus_status.setText("Session complete. Nice work.")
-            QMessageBox.information(self, "NEXUS Focus", "25 minutes complete. Take a short break.")
+            QMessageBox.information(self, "NEXUS Focus", f"{self._focus_total_seconds // 60} minutes complete. Take a short break.")
             self.refresh_all()
 
     def _set_focus_preset(self) -> None:
