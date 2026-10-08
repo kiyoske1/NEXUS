@@ -137,6 +137,35 @@ class Database:
                         (profile["name"], profile["email"], profile["username"], str(self.path), profile.get("created_at") or self.now()),
                     )
 
+    def dashboard_summary(self) -> dict[str, Any]:
+        today = date.today().isoformat()
+        with self.connect() as db:
+            open_tasks = db.execute("SELECT COUNT(*) FROM tasks WHERE done = 0").fetchone()[0]
+            done_today = db.execute("SELECT COUNT(*) FROM tasks WHERE done = 1 AND DATE(completed_at) = ?", (today,)).fetchone()[0]
+            focus_today = db.execute("SELECT COALESCE(SUM(duration_minutes), 0) FROM focus_sessions WHERE DATE(completed_at) = ?", (today,)).fetchone()[0]
+            habit_done_today = db.execute("SELECT COUNT(*) FROM habit_logs WHERE log_date = ?", (today,)).fetchone()[0]
+            balance = db.execute("""
+                SELECT COALESCE(SUM(CASE WHEN kind = 'income' THEN amount ELSE -amount END), 0)
+                FROM transactions
+            """).fetchone()[0]
+            weekly = db.execute("""
+                SELECT DATE(completed_at) AS day, COUNT(*) AS count
+                FROM tasks
+                WHERE done = 1 AND DATE(completed_at) >= DATE(?, '-6 days')
+                GROUP BY DATE(completed_at)
+            """, (today,)).fetchall()
+        weekly_map = {row["day"]: row["count"] for row in weekly}
+        week_done = sum(weekly_map.values())
+        return {
+            "open_tasks": open_tasks,
+            "done_today": done_today,
+            "focus_today": focus_today,
+            "habit_done_today": habit_done_today,
+            "balance": balance,
+            "week_done": week_done,
+            "week_days": [weekly_map.get((date.today()).fromordinal(date.today().toordinal() - offset).isoformat(), 0) for offset in range(6, -1, -1)],
+        }
+
     def account_summary(self) -> dict[str, Any]:
         profile = self.get_profile() or {}
         stats = self.stats()
