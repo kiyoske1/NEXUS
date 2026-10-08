@@ -10,7 +10,7 @@ from pathlib import Path
 from nexus.database import Database
 
 
-TABLES = ("tasks", "habits", "habit_logs", "transactions", "journal_entries", "focus_sessions")
+TABLES = ("tasks", "habits", "habit_logs", "transactions", "journal_entries", "focus_sessions", "activity_log", "notifications")
 
 
 def create_backup(database: Database, destination: str | Path) -> Path:
