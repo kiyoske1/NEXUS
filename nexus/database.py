@@ -552,7 +552,7 @@ class Database:
                 if conflict:
                     raise ValueError("That email or username is already registered on this PC.")
         with self.connect() as db:
-            existing = db.execute("SELECT password_hash, salt FROM profile WHERE id = 1").fetchone()
+            existing = db.execute("SELECT password_hash, salt, created_at FROM profile WHERE id = 1").fetchone()
             salt = existing["salt"] if existing and existing["salt"] else secrets.token_hex(16)
             password_hash = existing["password_hash"] if existing else ""
             if password:
