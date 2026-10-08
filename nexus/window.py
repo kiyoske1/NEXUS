@@ -707,6 +707,12 @@ class MainWindow(QMainWindow):
         self.sync_status = QLabel()
         self.sync_status.setObjectName("Muted")
         sync_box.addWidget(self.sync_status)
+        self.cloud_profile_label = QLabel("Cloud profile: not connected")
+        self.cloud_profile_label.setObjectName("Muted")
+        sync_box.addWidget(self.cloud_profile_label)
+        self.last_sync_label = QLabel("Last sync: never")
+        self.last_sync_label.setObjectName("Tiny")
+        sync_box.addWidget(self.last_sync_label)
         sync_row = QHBoxLayout()
         cloud_connect = QPushButton("☁  Connect cloud account")
         cloud_connect.clicked.connect(self._connect_cloud)
@@ -767,9 +773,21 @@ class MainWindow(QMainWindow):
         if self.sync_client.token:
             self.sync_status.setText(f"● CLOUD CONNECTED  ·  {self.sync_client.api_url}")
             self.sync_status.setObjectName("StatusGood")
+            try:
+                user = self.sync_client._request("GET", "/me")
+                self.cloud_profile_label.setText(
+                    f"☁  {user.get('name', user.get('username', 'NEXUS user'))}  ·  @{user.get('username', '')}"
+                )
+            except SyncError:
+                self.cloud_profile_label.setText("☁  Cloud profile connected")
+            self.last_sync_label.setText(
+                f"Last sync: {self.sync_client.last_sync_at or 'never'}"
+            )
         else:
             self.sync_status.setText(f"○ CLOUD OFFLINE  ·  API {self.sync_client.api_url}")
             self.sync_status.setObjectName("StatusWarn")
+            self.cloud_profile_label.setText("Cloud profile: not connected")
+            self.last_sync_label.setText("Last sync: never")
         self.sync_status.style().unpolish(self.sync_status)
         self.sync_status.style().polish(self.sync_status)
 
