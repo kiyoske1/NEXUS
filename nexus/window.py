@@ -224,79 +224,51 @@ class MainWindow(QMainWindow):
 
 
     def _show_auth_gate_if_needed(self) -> None:
-        profile = self.db.get_profile()
-        if profile and profile.get("password_hash"):
-            self._show_login_screen()
-        else:
-            self._show_register_screen()
+        self._show_auth_choice()
 
     def _auth_shell(self, title: str, subtitle: str) -> tuple[QWidget, QVBoxLayout]:
-        root = QWidget()
-        root.setObjectName("AppRoot")
-        outer = QVBoxLayout(root)
-        outer.setContentsMargins(40, 40, 40, 40)
-        outer.addStretch(1)
-        card = panel()
-        card.setMaximumWidth(520)
-        box = QVBoxLayout(card)
-        box.setContentsMargins(34, 34, 34, 34)
-        box.setSpacing(14)
-        box.addWidget(heading("NEXUS", "Brand"))
-        box.addWidget(heading(title, "Hero"))
-        box.addWidget(QLabel(subtitle))
-        outer.addWidget(card, 0, Qt.AlignmentFlag.AlignHCenter)
-        outer.addStretch(1)
+        root = QWidget(); root.setObjectName("AppRoot")
+        outer = QVBoxLayout(root); outer.setContentsMargins(40, 40, 40, 40); outer.addStretch(1)
+        card = panel(); card.setMaximumWidth(520)
+        box = QVBoxLayout(card); box.setContentsMargins(34, 34, 34, 34); box.setSpacing(14)
+        box.addWidget(heading("NEXUS", "Brand")); box.addWidget(heading(title, "Hero")); box.addWidget(QLabel(subtitle))
+        outer.addWidget(card, 0, Qt.AlignmentFlag.AlignHCenter); outer.addStretch(1)
         return root, box
 
+    def _show_auth_choice(self) -> None:
+        root, box = self._auth_shell("Welcome to NEXUS", "Choose how you want to enter your personal command center.")
+        login = QPushButton("→  Sign in"); login.setObjectName("Primary"); login.setMinimumHeight(48); login.clicked.connect(self._show_login_screen)
+        register = QPushButton("+  Create account"); register.setMinimumHeight(48); register.clicked.connect(self._show_register_screen)
+        box.addWidget(login); box.addWidget(register)
+        profile = self.db.get_profile()
+        if profile and profile.get("password_hash"):
+            note = QLabel(f"Local account detected · @{profile.get('username', '')}"); note.setObjectName("Muted"); box.addWidget(note)
+        note = QLabel("Accounts are stored locally on this PC. Your workspace data remains on this device."); note.setObjectName("Muted"); note.setWordWrap(True); box.addWidget(note)
+        self.setCentralWidget(root)
+
     def _show_register_screen(self) -> None:
-        root, box = self._auth_shell("Create your NEXUS", "One local account for your personal command center.")
-        self.auth_name = QLineEdit()
-        self.auth_name.setPlaceholderText("Display name")
-        self.auth_email = QLineEdit()
-        self.auth_email.setPlaceholderText("Email")
-        self.auth_username = QLineEdit()
-        self.auth_username.setPlaceholderText("Username")
-        self.auth_password = QLineEdit()
-        self.auth_password.setPlaceholderText("Password (6+ characters)")
-        self.auth_password.setEchoMode(QLineEdit.EchoMode.Password)
-        self.auth_status = QLabel("")
-        self.auth_status.setObjectName("Muted")
-        self.auth_status.setWordWrap(True)
-        create = QPushButton("Create account")
-        create.setObjectName("Primary")
-        create.setMinimumHeight(46)
-        create.setDefault(True)
-        create.clicked.connect(self._register_account)
-        self.auth_password.returnPressed.connect(self._register_account)
-        for widget in (self.auth_name, self.auth_email, self.auth_username, self.auth_password, create):
-            box.addWidget(widget)
+        root, box = self._auth_shell("Create your NEXUS", "Set up your local account and personal workspace.")
+        self.auth_name = QLineEdit(); self.auth_name.setPlaceholderText("Display name")
+        self.auth_email = QLineEdit(); self.auth_email.setPlaceholderText("Email")
+        self.auth_username = QLineEdit(); self.auth_username.setPlaceholderText("Username")
+        self.auth_password = QLineEdit(); self.auth_password.setPlaceholderText("Password (6+ characters)"); self.auth_password.setEchoMode(QLineEdit.EchoMode.Password)
+        self.auth_status = QLabel(""); self.auth_status.setObjectName("Muted"); self.auth_status.setWordWrap(True)
+        create = QPushButton("Create account"); create.setObjectName("Primary"); create.setMinimumHeight(46); create.clicked.connect(self._register_account); self.auth_password.returnPressed.connect(self._register_account)
+        back = QPushButton("←  Back"); back.clicked.connect(self._show_auth_choice)
+        for widget in (self.auth_name, self.auth_email, self.auth_username, self.auth_password, create, back): box.addWidget(widget)
         box.addWidget(self.auth_status)
-        note = QLabel("Your account is stored locally on this PC. Cloud sync can be connected later.")
-        note.setObjectName("Muted")
-        note.setWordWrap(True)
-        box.addWidget(note)
+        note = QLabel("Your account is stored locally on this PC. Cloud sync can be connected later."); note.setObjectName("Muted"); note.setWordWrap(True); box.addWidget(note)
         self.setCentralWidget(root)
 
     def _show_login_screen(self) -> None:
         root, box = self._auth_shell("Welcome back", "Sign in to unlock your NEXUS workspace.")
         profile = self.db.get_profile() or {}
-        self.auth_username = QLineEdit()
-        self.auth_username.setText(profile.get("username", ""))
-        self.auth_username.setPlaceholderText("Username or email")
-        self.auth_password = QLineEdit()
-        self.auth_password.setPlaceholderText("Password")
-        self.auth_password.setEchoMode(QLineEdit.EchoMode.Password)
-        login = QPushButton("Sign in")
-        login.setObjectName("Primary")
-        login.clicked.connect(self._login_account)
-        self.auth_password.returnPressed.connect(self._login_account)
-        self.auth_username.returnPressed.connect(lambda: self.auth_password.setFocus())
-        self.auth_status = QLabel("")
-        self.auth_status.setObjectName("Muted")
-        box.addWidget(self.auth_username)
-        box.addWidget(self.auth_password)
-        box.addWidget(login)
-        box.addWidget(self.auth_status)
+        self.auth_username = QLineEdit(); self.auth_username.setText(profile.get("username", "")); self.auth_username.setPlaceholderText("Username or email")
+        self.auth_password = QLineEdit(); self.auth_password.setPlaceholderText("Password"); self.auth_password.setEchoMode(QLineEdit.EchoMode.Password)
+        login = QPushButton("Sign in"); login.setObjectName("Primary"); login.setMinimumHeight(46); login.clicked.connect(self._login_account); self.auth_password.returnPressed.connect(self._login_account); self.auth_username.returnPressed.connect(lambda: self.auth_password.setFocus())
+        back = QPushButton("←  Back"); back.clicked.connect(self._show_auth_choice)
+        self.auth_status = QLabel(""); self.auth_status.setObjectName("Muted")
+        for widget in (self.auth_username, self.auth_password, login, back, self.auth_status): box.addWidget(widget)
         self.setCentralWidget(root)
 
     def _register_account(self) -> None:
@@ -629,6 +601,17 @@ class MainWindow(QMainWindow):
         box.addWidget(profile_card)
 
         box.addSpacing(8)
+        account_card = panel()
+        account_box = QVBoxLayout(account_card)
+        account_box.setContentsMargins(18, 16, 18, 16)
+        account_box.addWidget(heading("Account", "Section"))
+        account_box.addWidget(QLabel("Return to the account chooser. Your local workspace data stays on this PC."))
+        switch_account = QPushButton("⇄  Switch account")
+        switch_account.setMinimumHeight(42)
+        switch_account.clicked.connect(self._switch_account)
+        account_box.addWidget(switch_account)
+        box.addWidget(account_card)
+
         box.addWidget(heading("NEXUS // LOCAL CONFIG", "Tiny"))
         box.addWidget(QLabel("No account required. Preferences are stored with your desktop app settings."))
         box.addStretch(1)
@@ -636,6 +619,11 @@ class MainWindow(QMainWindow):
         layout.addStretch(1)
         return page
 
+
+    def _switch_account(self) -> None:
+        answer = QMessageBox.question(self, "Switch account", "Return to the account chooser?\n\nYour local NEXUS data will remain on this PC.", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.Yes)
+        if answer == QMessageBox.StandardButton.Yes:
+            self._show_auth_choice()
 
     def _save_profile(self) -> None:
         try:
