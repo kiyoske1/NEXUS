@@ -1002,12 +1002,32 @@ class MainWindow(QMainWindow):
             self._connect_cloud()
             if not self.sync_client.token:
                 return
-        try:
-            result = self.sync_client.sync()
-            self.refresh_all()
-            self._message(f"Sync complete. Pulled {result['pulled']} records, pushed {result['pushed']}.")
-        except SyncError as error:
-            self._message(str(error))
+        if self._cloud_sync_running or (self._cloud_worker and self._cloud_worker.isRunning()):
+            return
+        self._cloud_sync_running = True
+        self._set_sync_center_state("syncing")
+        self._cloud_worker = CloudSyncWorker(self.sync_client)
+        self._cloud_worker.finished.connect(self._on_manual_sync_finished)
+        self._cloud_worker.failed.connect(self._on_manual_sync_failed)
+        self._cloud_worker.finished.connect(self._cleanup_cloud_worker)
+        self._cloud_worker.failed.connect(self._cleanup_cloud_worker)
+        self._cloud_worker.start()
+
+    def _on_manual_sync_finished(self, result: dict) -> None:
+        self._cloud_sync_running = False
+        self._set_sync_center_state("connected", result)
+        self._refresh_sync_status()
+        self.refresh_all()
+        self._message(
+            f"Sync complete. Pulled {result.get('pulled', 0)} records, "
+            f"pushed {result.get('pushed', 0)}."
+        )
+
+    def _on_manual_sync_failed(self, message: str) -> None:
+        self._cloud_sync_running = False
+        self._set_sync_center_state("offline")
+        self._refresh_sync_status()
+        self._message(message)
 
     def _disconnect_cloud(self) -> None:
         try:
