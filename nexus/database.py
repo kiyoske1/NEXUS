@@ -590,6 +590,17 @@ class Database:
         self.log_activity("Focus session completed", f"{int(duration_minutes)} minutes")
         self.add_notification("Focus session complete", f"{int(duration_minutes)} minutes logged.", "success")
 
+    def get_focus_sessions(self, on_date: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
+        query = "SELECT * FROM focus_sessions"
+        params: list[Any] = []
+        if on_date:
+            query += " WHERE DATE(completed_at) = ?"
+            params.append(on_date)
+        query += " ORDER BY id DESC LIMIT ?"
+        params.append(max(1, int(limit)))
+        with self.connect() as db:
+            return [dict(row) for row in db.execute(query, params).fetchall()]
+
     def weekly_activity(self, end_date: date | None = None) -> list[dict[str, Any]]:
         """Return activity totals for the seven calendar days ending on end_date."""
         from datetime import timedelta
