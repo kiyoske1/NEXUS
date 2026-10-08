@@ -79,6 +79,20 @@ class Database:
                     duration_minutes INTEGER NOT NULL,
                     completed_at TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS activity_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    action TEXT NOT NULL,
+                    detail TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS notifications (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    title TEXT NOT NULL,
+                    body TEXT NOT NULL DEFAULT '',
+                    level TEXT NOT NULL DEFAULT 'info',
+                    read INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL
+                );
             """)
             self._migrate_profile_schema(db)
 
@@ -227,6 +241,40 @@ class Database:
     def now() -> str:
         return datetime.now().isoformat(timespec="seconds")
 
+    def log_activity(self, action: str, detail: str = "") -> int:
+        with self.connect() as db:
+            cursor = db.execute("INSERT INTO activity_log(action, detail, created_at) VALUES (?, ?, ?)", (action.strip() or "Activity", detail.strip(), self.now()))
+            return int(cursor.lastrowid)
+
+    def add_notification(self, title: str, body: str = "", level: str = "info") -> int:
+        with self.connect() as db:
+            cursor = db.execute("INSERT INTO notifications(title, body, level, created_at) VALUES (?, ?, ?, ?)", (title.strip() or "NEXUS", body.strip(), level, self.now()))
+            return int(cursor.lastrowid)
+
+    def get_notifications(self, unread_only: bool = False, limit: int = 50) -> list[dict[str, Any]]:
+        query = "SELECT * FROM notifications"
+        if unread_only:
+            query += " WHERE read = 0"
+        query += " ORDER BY id DESC LIMIT ?"
+        with self.connect() as db:
+            return [dict(row) for row in db.execute(query, (max(1, int(limit)),)).fetchall()]
+
+    def unread_notification_count(self) -> int:
+        with self.connect() as db:
+            return int(db.execute("SELECT COUNT(*) FROM notifications WHERE read = 0").fetchone()[0])
+
+    def mark_notification_read(self, notification_id: int) -> None:
+        with self.connect() as db:
+            db.execute("UPDATE notifications SET read = 1 WHERE id = ?", (notification_id,))
+
+    def mark_all_notifications_read(self) -> None:
+        with self.connect() as db:
+            db.execute("UPDATE notifications SET read = 1 WHERE read = 0")
+
+    def get_activity(self, limit: int = 80) -> list[dict[str, Any]]:
+        with self.connect() as db:
+            return [dict(row) for row in db.execute("SELECT * FROM activity_log ORDER BY id DESC LIMIT ?", (max(1, int(limit)),)).fetchall()]
+
     def add_task(self, title: str, category: str = "Personal", xp: int = 25) -> int:
         title = title.strip()
         if not title:
@@ -236,7 +284,10 @@ class Database:
                 "INSERT INTO tasks(title, category, xp, created_at) VALUES (?, ?, ?, ?)",
                 (title, category.strip() or "Personal", max(1, int(xp)), self.now()),
             )
-            return int(cursor.lastrowid)
+            task_id = int(cursor.lastrowid)
+            self.log_activity("Quest created", title)
+            self.add_notification("New quest added", title, "info")
+            return task_id
 
     def get_tasks(self, include_done: bool = True) -> list[dict[str, Any]]:
         query = "SELECT * FROM tasks"
@@ -252,7 +303,11 @@ class Database:
                 "UPDATE tasks SET done = 1, completed_at = ? WHERE id = ? AND done = 0",
                 (self.now(), task_id),
             )
-            return cursor.rowcount == 1
+            changed = cursor.rowcount == 1
+        if changed:
+            self.log_activity("Quest completed", f"{task_id}")
+            self.add_notification("Quest complete", "XP earned. Keep the momentum going.", "success")
+        return changed
 
     def delete_task(self, task_id: int) -> None:
         with self.connect() as db:
@@ -281,7 +336,10 @@ class Database:
                 "INSERT INTO habits(title, created_at) VALUES (?, ?)",
                 (title, self.now()),
             )
-            return int(cursor.lastrowid)
+            habit_id = int(cursor.lastrowid)
+            self.log_activity("Habit created", title)
+            self.add_notification("Habit added", title, "info")
+            return habit_id
 
     def get_habits(self, on_date: str | None = None) -> list[dict[str, Any]]:
         day = on_date or date.today().isoformat()
@@ -309,7 +367,8 @@ class Database:
                 "INSERT INTO habit_logs(habit_id, log_date) VALUES (?, ?)",
                 (habit_id, day),
             )
-            return True
+        self.log_activity("Habit checked in", f"{habit_id} · {day}")
+        return True
 
     def delete_habit(self, habit_id: int) -> None:
         with self.connect() as db:
@@ -340,7 +399,9 @@ class Database:
                 "INSERT INTO transactions(title, amount, kind, created_at) VALUES (?, ?, ?, ?)",
                 (title, round(amount, 2), kind, self.now()),
             )
-            return int(cursor.lastrowid)
+            transaction_id = int(cursor.lastrowid)
+            self.log_activity("Finance entry added", title)
+            return transaction_id
 
     def get_transactions(self, limit: int = 50) -> list[dict[str, Any]]:
         with self.connect() as db:
@@ -359,7 +420,9 @@ class Database:
                 "INSERT INTO journal_entries(title, body, created_at) VALUES (?, ?, ?)",
                 (title or "Untitled", body, self.now()),
             )
-            return int(cursor.lastrowid)
+            entry_id = int(cursor.lastrowid)
+            self.log_activity("Journal entry created", title or "Untitled")
+            return entry_id
 
     def get_journal_entries(self, limit: int = 50) -> list[dict[str, Any]]:
         with self.connect() as db:
@@ -439,6 +502,8 @@ class Database:
                 "INSERT INTO focus_sessions(duration_minutes, completed_at) VALUES (?, ?)",
                 (int(duration_minutes), self.now()),
             )
+        self.log_activity("Focus session completed", f"{int(duration_minutes)} minutes")
+        self.add_notification("Focus session complete", f"{int(duration_minutes)} minutes logged.", "success")
 
     def weekly_activity(self, end_date: date | None = None) -> list[dict[str, Any]]:
         """Return activity totals for the seven calendar days ending on end_date."""
