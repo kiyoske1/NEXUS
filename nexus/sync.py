@@ -339,17 +339,27 @@ class SyncClient:
         if table not in TABLES:
             return
         with self.database.connect() as db:
+            # Remote payloads must never control SQL identifiers. Derive the
+            # writable columns from the local schema and ignore unknown fields.
+            allowed_columns = {
+                row["name"] for row in db.execute(f"PRAGMA table_info({table})").fetchall()
+            } - {"id"}
+            columns = [
+                key for key in payload
+                if key in allowed_columns and key != "habit_client_id"
+            ]
+            if not columns:
+                raise SyncError("Remote sync record contains no valid fields.")
+
             existing = db.execute("SELECT local_id FROM sync_meta WHERE entity=? AND client_id=?",
                                   (entity, client_id)).fetchone()
             if existing:
                 local_id = int(existing["local_id"])
-                columns = [k for k in payload if k != "id" and k != "habit_client_id"]
-                values = [payload[k] for k in columns]
-                db.execute(f"UPDATE {table} SET {', '.join(f'{c}=?' for c in columns)} WHERE id=?",
+                values = [payload[key] for key in columns]
+                db.execute(f"UPDATE {table} SET {', '.join(f'{column}=?' for column in columns)} WHERE id=?",
                            [*values, local_id])
             else:
-                columns = [k for k in payload if k not in {"id", "habit_client_id"}]
-                values = [payload[k] for k in columns]
+                values = [payload[key] for key in columns]
                 cursor = db.execute(f"INSERT INTO {table} ({', '.join(columns)}) VALUES ({','.join('?' for _ in columns)})", values)
                 local_id = int(cursor.lastrowid)
             if table == "habit_logs" and payload.get("habit_client_id"):
