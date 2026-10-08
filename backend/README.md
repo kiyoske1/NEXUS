@@ -1,6 +1,6 @@
 # NEXUS Backend
 
-FastAPI service for NEXUS accounts and future cross-device sync.
+FastAPI service for NEXUS accounts and cross-device sync. **API v1 is the stable public contract.**
 
 ## Run locally
 
@@ -14,7 +14,8 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
-API docs: `http://127.0.0.1:8000/docs`
+API v1 docs: `http://127.0.0.1:8000/api/v1/docs`  
+OpenAPI: `http://127.0.0.1:8000/api/v1/openapi.json`
 
 ## Current API
 
