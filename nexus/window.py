@@ -6,12 +6,13 @@ from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QLabel, QPushButton,
     QStackedWidget, QFrame, QListWidget, QListWidgetItem, QLineEdit,
-    QComboBox, QSpinBox, QDoubleSpinBox, QTextEdit, QInputDialog,
+    QComboBox, QSpinBox, QDoubleSpinBox, QTextEdit, QInputDialog, QFileDialog,
     QMessageBox, QProgressBar, QButtonGroup, QRadioButton, QScrollArea,
     QGridLayout,
 )
 
 from nexus.database import Database
+from nexus.backup import create_backup, export_json
 
 
 STYLES = """
@@ -108,6 +109,12 @@ class MainWindow(QMainWindow):
         self.date_label = QLabel()
         self.date_label.setObjectName("Muted")
         top.addWidget(self.date_label)
+        backup_button = QPushButton("Backup")
+        backup_button.clicked.connect(self._backup_database)
+        export_button = QPushButton("Export JSON")
+        export_button.clicked.connect(self._export_json)
+        top.addWidget(backup_button)
+        top.addWidget(export_button)
         content_layout.addLayout(top)
         self.pages.addWidget(self._overview_page())
         self.pages.addWidget(self._quests_page())
@@ -476,6 +483,30 @@ class MainWindow(QMainWindow):
         self.journal_title.clear()
         self.journal_body.clear()
         self.refresh_all()
+
+    def _backup_database(self) -> None:
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Create NEXUS backup", "nexus-backup.db", "SQLite database (*.db)"
+        )
+        if not path:
+            return
+        try:
+            create_backup(self.db, path)
+            self._message("Backup created successfully.")
+        except Exception as error:
+            self._message(f"Backup failed: {error}")
+
+    def _export_json(self) -> None:
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export NEXUS data", "nexus-export.json", "JSON file (*.json)"
+        )
+        if not path:
+            return
+        try:
+            export_json(self.db, path)
+            self._message("JSON export created successfully.")
+        except Exception as error:
+            self._message(f"Export failed: {error}")
 
     def _message(self, text: str) -> None:
         QMessageBox.information(self, "NEXUS", text)
