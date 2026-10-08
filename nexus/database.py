@@ -399,7 +399,7 @@ class Database:
             password_hash = existing["password_hash"] if existing else ""
             if password:
                 password_hash = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 120_000).hex()
-            created_at = self.now()
+            created_at = existing["created_at"] if existing and existing["created_at"] else self.now()
             db.execute("INSERT INTO profile(id, name, email, username, password_hash, salt, created_at) VALUES (1, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name=excluded.name, email=excluded.email, username=excluded.username, password_hash=excluded.password_hash, salt=excluded.salt", (name, email, username, password_hash, salt, created_at))
 
         if _register:
