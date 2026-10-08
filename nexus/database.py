@@ -137,6 +137,26 @@ class Database:
                         (profile["name"], profile["email"], profile["username"], str(self.path), profile.get("created_at") or self.now()),
                     )
 
+    def account_summary(self) -> dict[str, Any]:
+        profile = self.get_profile() or {}
+        stats = self.stats()
+        with self.connect() as db:
+            first = db.execute("SELECT MIN(created_at) FROM tasks").fetchone()[0]
+            last = db.execute("SELECT MAX(created_at) FROM journal_entries").fetchone()[0]
+            focus_count = db.execute("SELECT COUNT(*) FROM focus_sessions").fetchone()[0]
+        return {
+            "name": profile.get("name", ""),
+            "email": profile.get("email", ""),
+            "username": profile.get("username", ""),
+            "created_at": profile.get("created_at", ""),
+            "tasks": stats["tasks_total"],
+            "tasks_done": stats["tasks_done"],
+            "xp": stats["xp"],
+            "focus_sessions": focus_count,
+            "first_task": first,
+            "last_journal": last,
+        }
+
     def list_accounts(self) -> list[dict[str, Any]]:
         with self._connect_accounts() as db:
             rows = db.execute("SELECT id, name, email, username, db_path, created_at FROM accounts ORDER BY name COLLATE NOCASE").fetchall()
