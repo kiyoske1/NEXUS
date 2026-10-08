@@ -149,3 +149,31 @@ def test_logout_only_revokes_current_device_and_logout_all_revokes_everything():
     assert client.post("/auth/refresh", json={
         "refresh_token": second["refresh_token"], "device_id": "device-b"
     }).status_code == 401
+
+
+def test_device_management_rename_and_current_flag():
+    response = client.post("/api/v1/auth/register", json={
+        "name": "Device User",
+        "email": "device-user@example.com",
+        "username": "device_user",
+        "password": "password123",
+        "device_id": "device-main",
+        "device_name": "Main PC",
+    })
+    assert response.status_code == 201
+    token = response.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    devices = client.get("/api/v1/devices", headers=headers)
+    assert devices.status_code == 200
+    assert devices.json()[0]["current"] is True
+    assert devices.json()[0]["name"] == "Main PC"
+
+    renamed = client.patch(
+        "/api/v1/devices/device-main",
+        headers=headers,
+        json={"name": "NEXUS Workstation"},
+    )
+    assert renamed.status_code == 200
+    assert renamed.json()["name"] == "NEXUS Workstation"
+    assert renamed.json()["current"] is True
