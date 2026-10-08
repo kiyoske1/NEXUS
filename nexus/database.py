@@ -5,6 +5,8 @@ All user data stays on the machine. The database is created lazily in ~/.nexus.
 from __future__ import annotations
 
 import sqlite3
+import hashlib
+import secrets
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
@@ -58,6 +60,15 @@ class Database:
                     body TEXT NOT NULL,
                     created_at TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS profile (
+                    id INTEGER PRIMARY KEY CHECK(id = 1),
+                    name TEXT NOT NULL DEFAULT '',
+                    email TEXT NOT NULL DEFAULT '',
+                    username TEXT NOT NULL DEFAULT '',
+                    password_hash TEXT NOT NULL DEFAULT '',
+                    salt TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL
+                );
                 CREATE TABLE IF NOT EXISTS focus_sessions (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     duration_minutes INTEGER NOT NULL,
@@ -99,6 +110,20 @@ class Database:
     def delete_task(self, task_id: int) -> None:
         with self.connect() as db:
             db.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+
+    def update_task(self, task_id: int, title: str, category: str, xp: int) -> None:
+        title = title.strip()
+        if not title:
+            raise ValueError("Task title cannot be empty")
+        with self.connect() as db:
+            db.execute("UPDATE tasks SET title = ?, category = ?, xp = ? WHERE id = ?", (title, category.strip() or "Personal", max(1, int(xp)), task_id))
+
+    def update_habit(self, habit_id: int, title: str) -> None:
+        title = title.strip()
+        if not title:
+            raise ValueError("Habit title cannot be empty")
+        with self.connect() as db:
+            db.execute("UPDATE habits SET title = ? WHERE id = ?", (title, habit_id))
 
     def add_habit(self, title: str) -> int:
         title = title.strip()
@@ -143,6 +168,17 @@ class Database:
         with self.connect() as db:
             db.execute("DELETE FROM habits WHERE id = ?", (habit_id,))
 
+    def update_transaction(self, transaction_id: int, title: str, amount: float, kind: str) -> None:
+        title, amount = title.strip(), float(amount)
+        if not title:
+            raise ValueError("Transaction title cannot be empty")
+        if amount <= 0:
+            raise ValueError("Amount must be greater than zero")
+        if kind not in {"income", "expense"}:
+            raise ValueError("Transaction kind must be income or expense")
+        with self.connect() as db:
+            db.execute("UPDATE transactions SET title = ?, amount = ?, kind = ? WHERE id = ?", (title, round(amount, 2), kind, transaction_id))
+
     def add_transaction(self, title: str, amount: float, kind: str) -> int:
         title = title.strip()
         if not title:
@@ -186,9 +222,45 @@ class Database:
             ).fetchall()
             return [dict(row) for row in rows]
 
+    def update_journal_entry(self, entry_id: int, title: str, body: str) -> None:
+        title, body = title.strip(), body.strip()
+        if not title and not body:
+            raise ValueError("Journal entry cannot be empty")
+        with self.connect() as db:
+            db.execute("UPDATE journal_entries SET title = ?, body = ? WHERE id = ?", (title or "Untitled", body, entry_id))
+
     def delete_journal_entry(self, entry_id: int) -> None:
         with self.connect() as db:
             db.execute("DELETE FROM journal_entries WHERE id = ?", (entry_id,))
+
+    def get_profile(self) -> dict[str, Any] | None:
+        with self.connect() as db:
+            row = db.execute("SELECT id, name, email, username, created_at FROM profile WHERE id = 1").fetchone()
+            return dict(row) if row else None
+
+    def save_profile(self, name: str, email: str, username: str, password: str = "") -> None:
+        name, email, username = name.strip(), email.strip(), username.strip()
+        if not name:
+            raise ValueError("Name cannot be empty")
+        if not email or "@" not in email:
+            raise ValueError("Enter a valid email")
+        if not username:
+            raise ValueError("Username cannot be empty")
+        with self.connect() as db:
+            existing = db.execute("SELECT password_hash, salt FROM profile WHERE id = 1").fetchone()
+            salt = existing["salt"] if existing and existing["salt"] else secrets.token_hex(16)
+            password_hash = existing["password_hash"] if existing else ""
+            if password:
+                password_hash = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 120_000).hex()
+            db.execute("INSERT INTO profile(id, name, email, username, password_hash, salt, created_at) VALUES (1, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name=excluded.name, email=excluded.email, username=excluded.username, password_hash=excluded.password_hash, salt=excluded.salt", (name, email, username, password_hash, salt, self.now()))
+
+    def verify_profile_password(self, password: str) -> bool:
+        with self.connect() as db:
+            row = db.execute("SELECT password_hash, salt FROM profile WHERE id = 1").fetchone()
+        if not row or not row["password_hash"]:
+            return False
+        digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), row["salt"].encode("utf-8"), 120_000).hex()
+        return secrets.compare_digest(digest, row["password_hash"])
 
     def add_focus_session(self, duration_minutes: int) -> None:
         if duration_minutes < 1:
