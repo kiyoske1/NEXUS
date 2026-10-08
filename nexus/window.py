@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
     QStackedWidget, QFrame, QListWidget, QListWidgetItem, QLineEdit,
     QComboBox, QSpinBox, QDoubleSpinBox, QTextEdit, QInputDialog, QFileDialog,
     QMessageBox, QProgressBar, QButtonGroup, QRadioButton, QScrollArea,
-    QGridLayout,
+    QGridLayout, QCalendarWidget,
 )
 
 from nexus.database import Database
@@ -413,9 +413,9 @@ class MainWindow(QMainWindow):
 
     def _translated_names(self) -> list[str]:
         return {
-            "English": ["Overview", "Quests", "Habits", "Focus", "Finance", "Journal", "Settings"],
-            "Русский": ["Обзор", "Задачи", "Привычки", "Фокус", "Финансы", "Дневник", "Настройки"],
-            "Română": ["Panou", "Sarcini", "Obiceiuri", "Focus", "Finanțe", "Jurnal", "Setări"],
+            "English": ["Overview", "Quests", "Habits", "Focus", "Finance", "Journal", "Calendar", "Insights", "Settings"],
+            "Русский": ["Обзор", "Задачи", "Привычки", "Фокус", "Финансы", "Дневник", "Календарь", "Статистика", "Настройки"],
+            "Română": ["Panou", "Sarcini", "Obiceiuri", "Focus", "Finanțe", "Jurnal", "Calendar", "Statistici", "Setări"],
         }.get(self.language, ["Overview", "Quests", "Habits", "Focus", "Finance", "Journal", "Settings"])
 
     def _tr(self, text: str) -> str:
