@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import sqlite3
 
-from PySide6.QtCore import Qt, QTimer, QSettings, QDate
+from PySide6.QtCore import Qt, QTimer, QSettings, QDate, QThread, Signal
 from PySide6.QtGui import QFont, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QLabel, QPushButton,
@@ -78,6 +78,22 @@ def heading(text: str, object_name: str = "Section") -> QLabel:
     return label
 
 
+class CloudSyncWorker(QThread):
+    finished = Signal(dict)
+    failed = Signal(str)
+
+    def __init__(self, sync_client: SyncClient) -> None:
+        super().__init__()
+        self.sync_client = sync_client
+
+    def run(self) -> None:
+        try:
+            result = self.sync_client.sync()
+            self.finished.emit(result)
+        except Exception as error:
+            self.failed.emit(str(error))
+
+
 class MainWindow(QMainWindow):
     def __init__(self, db: Database | None = None) -> None:
         super().__init__()
@@ -100,6 +116,7 @@ class MainWindow(QMainWindow):
         self._timer.setInterval(1000)
         self._timer.timeout.connect(self._tick)
         self._cloud_sync_running = False
+        self._cloud_worker: CloudSyncWorker | None = None
         self._cloud_timer = QTimer(self)
         self._cloud_timer.setInterval(5 * 60 * 1000)
         self._cloud_timer.timeout.connect(self._background_cloud_sync)
@@ -908,21 +925,36 @@ class MainWindow(QMainWindow):
             self._message(str(error))
 
     def _background_cloud_sync(self) -> None:
-        if not self.sync_client.token or self._cloud_sync_running:
+        if (
+            not self.sync_client.token
+            or self._cloud_sync_running
+            or (self._cloud_worker and self._cloud_worker.isRunning())
+        ):
             return
         self._cloud_sync_running = True
-        try:
-            result = self.sync_client.sync()
-            self.last_sync_label.setText(
-                f"Last sync: {self.sync_client.last_sync_at or 'just now'}  ·  "
-                f"↑ {result['pushed']}  ↓ {result['pulled']}"
-            )
-            self.background_sync_label.setText("✓  Background sync: synced just now")
-            self.refresh_all()
-        except SyncError:
-            self.background_sync_label.setText("○  Background sync: offline, will retry")
-        finally:
-            self._cloud_sync_running = False
+        self._cloud_worker = CloudSyncWorker(self.sync_client)
+        self._cloud_worker.finished.connect(self._on_background_sync_finished)
+        self._cloud_worker.failed.connect(self._on_background_sync_failed)
+        self._cloud_worker.finished.connect(self._cleanup_cloud_worker)
+        self._cloud_worker.failed.connect(self._cleanup_cloud_worker)
+        self._cloud_worker.start()
+
+    def _on_background_sync_finished(self, result: dict) -> None:
+        self._cloud_sync_running = False
+        self._refresh_sync_status()
+        self.refresh_all()
+
+    def _on_background_sync_failed(self, message: str) -> None:
+        self._cloud_sync_running = False
+        if self.sync_client.token:
+            self._refresh_sync_status()
+
+    def _cleanup_cloud_worker(self, *_args) -> None:
+        worker = self._cloud_worker
+        self._cloud_worker = None
+        if worker:
+            worker.deleteLater()
+
 
     def _cloud_sync(self) -> None:
         self._sync_endpoint()
