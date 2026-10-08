@@ -236,3 +236,11 @@ def test_database_connection_uses_busy_timeout(db):
     with db.connect() as connection:
         timeout = connection.execute("PRAGMA busy_timeout").fetchone()[0]
     assert timeout >= 5000
+
+
+def test_transaction_updates_reject_non_finite_amounts(db):
+    transaction_id = db.add_transaction("Valid amount", 10, "expense")
+    for amount in (float("nan"), float("inf"), float("-inf")):
+        with pytest.raises(ValueError):
+            db.update_transaction(transaction_id, "Invalid amount", amount, "expense")
+    assert db.get_transactions()[0]["amount"] == 10
